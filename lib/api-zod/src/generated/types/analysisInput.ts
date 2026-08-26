@@ -13,4 +13,25 @@ export interface AnalysisInput {
      * @maxItems 6
      */
   steps: FunnelStepInput[];
+  /**
+     * Deprecated alias for additionalContext
+     * @deprecated
+     * @maxLength 2000
+     */
+  context?: string;
+  /**
+     * Optional goal for the funnel being diagnosed
+     * @maxLength 500
+     */
+  funnelGoal?: string;
+  /**
+     * Optional recent product, campaign, or instrumentation changes
+     * @maxLength 2000
+     */
+  recentChanges?: string;
+  /**
+     * Optional business or instrumentation context for hypothesis generation
+     * @maxLength 2000
+     */
+  additionalContext?: string;
 }

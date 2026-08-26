@@ -6,22 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Plus,
-  Trash2,
-  ArrowRight,
-  CheckCircle2,
-  ListFilter,
-  RotateCcw,
-  AlertTriangle,
-  BarChart3,
-  Sparkles,
-  LoaderCircle,
-  SearchCheck,
-  FlaskConical,
-} from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { Plus, Trash2, ArrowRight, CheckCircle2, ListFilter, RotateCcw, AlertTriangle, BarChart3, Brain, FlaskConical } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { useGenerateHypotheses } from '@workspace/api-client-react';
+import { createAnalysis, type Analysis } from '@workspace/api-client-react';
 import {
   analyzeFunnel,
   type FunnelAnalysis,
@@ -42,6 +30,10 @@ const formSchema = z.object({
   steps: z.array(stepSchema)
     .min(3, "At least 3 steps required")
     .max(6, "Maximum 6 steps allowed")
+  ,
+  funnelGoal: z.string().optional().default(""),
+  recentChanges: z.string().optional().default(""),
+  context: z.string().optional().default(""),
 }).refine(data => {
   const orders = data.steps.map(s => s.order);
   return new Set(orders).size === orders.length;
@@ -60,12 +52,17 @@ const initialSteps = [
 
 export function FunnelBuilder() {
   const [analysisData, setAnalysisData] = useState<FunnelAnalysis | null>(null);
-  const hypothesesMutation = useGenerateHypotheses();
+  const [serverAnalysis, setServerAnalysis] = useState<Analysis | null>(null);
+  const [requestState, setRequestState] = useState<'idle' | 'loading' | 'complete' | 'not-needed' | 'error'>('idle');
+  const [requestError, setRequestError] = useState<string | null>(null);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      steps: initialSteps
+      steps: initialSteps,
+      funnelGoal: '',
+      recentChanges: '',
+      context: '',
     },
     mode: 'onChange',
   });
@@ -100,34 +97,52 @@ export function FunnelBuilder() {
     return () => subscription.unsubscribe();
   }, [form]);
 
-  const onSubmit = (data: FormValues) => {
-    hypothesesMutation.reset();
-    setAnalysisData(analyzeFunnel(data.steps));
+  const onSubmit = async (data: FormValues) => {
+    const deterministic = analyzeFunnel(data.steps);
+    setAnalysisData(deterministic);
+    setServerAnalysis(null);
+    setRequestError(null);
+
+    if (!deterministic.hasAbnormalDropOff) {
+      setRequestState('not-needed');
+      return;
+    }
+
+    setRequestState('loading');
+    try {
+      const result = await createAnalysis({
+        steps: data.steps,
+        ...(data.funnelGoal?.trim() ? { funnelGoal: data.funnelGoal.trim() } : {}),
+        ...(data.recentChanges?.trim() ? { recentChanges: data.recentChanges.trim() } : {}),
+        ...(data.context?.trim() ? { additionalContext: data.context.trim() } : {}),
+      });
+      setServerAnalysis(result);
+      setRequestState(result.status === 'ok' ? 'complete' : 'error');
+      if (result.errorMessage) {
+        setRequestError(result.errorMessage);
+      }
+    } catch (error) {
+      const responseData = (error as { data?: unknown }).data;
+      if (isAnalysis(responseData)) {
+        setServerAnalysis(responseData);
+        setRequestError(responseData.errorMessage);
+      } else {
+        setRequestError(error instanceof Error ? error.message : 'The hypothesis service could not be reached.');
+      }
+      setRequestState('error');
+    }
   };
 
   const handleReset = () => {
-    hypothesesMutation.reset();
     setAnalysisData(null);
+    setServerAnalysis(null);
+    setRequestState('idle');
+    setRequestError(null);
   };
 
   if (analysisData) {
     const flaggedCount = analysisData.flaggedSteps.length;
-    const aiResult = hypothesesMutation.data;
-    const aiErrorMessage = hypothesesMutation.error instanceof Error
-      ? hypothesesMutation.error.message
-      : 'AI hypotheses are unavailable right now. Your deterministic analysis is still available.';
-
-    const handleGenerateHypotheses = () => {
-      const flaggedSteps = analysisData.steps.filter((step) => step.isAbnormal);
-      if (flaggedSteps.length === 0) return;
-
-      hypothesesMutation.mutate({
-        data: {
-          thresholdPercent: analysisData.thresholdPercent,
-          flaggedSteps,
-        },
-      });
-    };
+    const ai = serverAnalysis?.ai;
 
     return (
       <div className="w-full max-w-4xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -258,96 +273,67 @@ export function FunnelBuilder() {
               </div>
 
               {analysisData.hasAbnormalDropOff && (
-                <div className="space-y-4 border-t border-border/50 pt-6">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <Sparkles className="h-4 w-4 text-primary" />
-                        <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Evidence-aware hypotheses</h3>
+                <div className="rounded-lg border border-primary/20 bg-primary/5 p-5">
+                  <div className="flex items-start gap-3">
+                    <Brain className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <h3 className="font-semibold">Evidence-aware hypotheses</h3>
+                        {requestState === 'loading' && <Badge variant="secondary">Generating…</Badge>}
+                        {requestState === 'complete' && serverAnalysis && <Badge variant="secondary">AI confidence: {serverAnalysis.confidence}</Badge>}
                       </div>
                       <p className="mt-1 text-sm text-muted-foreground">
-                        AI receives only the flagged calculations above. These are possibilities, not proven causes.
+                        These are competing possibilities based only on the flagged evidence and supplied context—not causal conclusions.
                       </p>
-                    </div>
-                    {!aiResult && !hypothesesMutation.isPending && (
-                      <Button onClick={handleGenerateHypotheses} className="font-semibold">
-                        <Sparkles className="mr-2 h-4 w-4" />
-                        Generate hypotheses
-                      </Button>
-                    )}
-                  </div>
 
-                  {hypothesesMutation.isPending && (
-                    <div className="flex items-center gap-3 rounded-lg border border-primary/20 bg-primary/5 p-4 text-sm">
-                      <LoaderCircle className="h-5 w-5 animate-spin text-primary" />
-                      <div>
-                        <div className="font-medium">Reviewing flagged evidence</div>
-                        <div className="text-muted-foreground">Generating cautious hypotheses and the next investigation.</div>
-                      </div>
-                    </div>
-                  )}
-
-                  {hypothesesMutation.isError && (
-                    <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-4" role="alert">
-                      <div className="flex items-start gap-3">
-                        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" />
-                        <div>
-                          <div className="font-semibold text-destructive">AI hypotheses were not available</div>
-                          <p className="mt-1 text-sm text-muted-foreground">{aiErrorMessage}</p>
-                          <Button variant="outline" size="sm" onClick={handleGenerateHypotheses} className="mt-3">
-                            Try again
-                          </Button>
+                      {requestState === 'loading' && (
+                        <div className="mt-4 rounded-md border border-border/60 bg-background/70 p-4 text-sm text-muted-foreground">
+                          Checking the flagged step for plausible explanations and the most useful next evidence…
                         </div>
-                      </div>
-                    </div>
-                  )}
+                      )}
 
-                  {aiResult && (
-                    <div className="grid gap-4 lg:grid-cols-2">
-                      <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="font-semibold">Possible explanations</div>
-                          <Badge variant="outline" className="capitalize">Evidence strength: {aiResult.confidence}</Badge>
+                      {requestError && (
+                        <div className="mt-4 flex items-start gap-2 rounded-md border border-destructive/25 bg-destructive/10 p-3 text-sm text-destructive" role="alert">
+                          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                          <span>Hypothesis generation failed: {requestError}. The deterministic evidence above is still valid.</span>
                         </div>
-                        <p className="mt-2 text-sm text-muted-foreground">{aiResult.reasoning}</p>
-                        <ul className="mt-4 space-y-2 text-sm">
-                          {aiResult.hypotheses.map((hypothesis, index) => (
-                            <li key={hypothesis} className="flex gap-2">
-                              <span className="font-mono text-primary">{index + 1}.</span>
-                              <span>{hypothesis}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
+                      )}
 
-                      <div className="rounded-lg border border-border/60 bg-secondary/40 p-4">
-                        <div className="flex items-center gap-2 font-semibold">
-                          <SearchCheck className="h-4 w-4 text-primary" />
-                          What to check next
-                        </div>
-                        <p className="mt-2 text-sm">{aiResult.suggestedInvestigation}</p>
-                        <div className="mt-4 border-t border-border/60 pt-4">
-                          <div className="flex items-center gap-2 font-semibold">
-                            <FlaskConical className="h-4 w-4 text-primary" />
-                            One experiment
+                      {ai && (
+                        <div className="mt-5 space-y-5 text-sm">
+                          <div>
+                            <div className="font-semibold">Competing hypotheses</div>
+                            <ul className="mt-2 list-disc space-y-2 pl-5">
+                              {ai.hypotheses.map((hypothesis) => <li key={hypothesis}>{hypothesis}</li>)}
+                            </ul>
                           </div>
-                          <p className="mt-2 text-sm">{aiResult.suggestedExperiment}</p>
+                          <div>
+                            <div className="font-semibold">Possible causes to investigate</div>
+                            <ul className="mt-2 list-disc space-y-2 pl-5 text-muted-foreground">
+                              {ai.likelyCauses.map((cause) => <li key={cause}>{cause}</li>)}
+                            </ul>
+                          </div>
+                          <div className="grid gap-4 sm:grid-cols-2">
+                            <div className="rounded-md border border-border/60 bg-background/70 p-3">
+                              <div className="font-semibold">Missing evidence</div>
+                              <ul className="mt-2 list-disc space-y-1 pl-5 text-muted-foreground">
+                                {ai.missingEvidence.map((evidence) => <li key={evidence}>{evidence}</li>)}
+                              </ul>
+                            </div>
+                            <div className="rounded-md border border-border/60 bg-background/70 p-3">
+                              <div className="font-semibold">Recommended investigation</div>
+                              <p className="mt-2 text-muted-foreground">{ai.recommendedInvestigation}</p>
+                            </div>
+                          </div>
+                          <div className="rounded-md border border-primary/20 bg-primary/5 p-3">
+                            <div className="flex items-center gap-2 font-semibold"><FlaskConical className="h-4 w-4 text-primary" />Suggested experiment</div>
+                            <p className="mt-2 text-muted-foreground">{ai.suggestedExperiment}</p>
+                          </div>
+                          <p className="border-t border-border/60 pt-4 text-xs text-muted-foreground">{ai.reasoning}</p>
                         </div>
-                      </div>
-
-                      <div className="rounded-lg border border-border/60 p-4 lg:col-span-2">
-                        <div className="font-semibold">Missing evidence</div>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          These checks could change which explanation is most useful to pursue.
-                        </p>
-                        <ul className="mt-3 grid gap-2 text-sm md:grid-cols-3">
-                          {aiResult.missingEvidence.map((item) => (
-                            <li key={item} className="rounded-md bg-muted/60 p-3">{item}</li>
-                          ))}
-                        </ul>
-                      </div>
+                      )}
                     </div>
-                  )}
+                  </div>
                 </div>
               )}
             </div>
@@ -357,15 +343,13 @@ export function FunnelBuilder() {
               <RotateCcw className="w-4 h-4 mr-2" />
               Edit Steps
             </Button>
-            <div className="text-right text-xs text-muted-foreground">
-              <div className="font-medium">
-                {analysisData.hasAbnormalDropOff ? 'AI reasoning is optional' : 'AI reasoning not called'}
-              </div>
-              <div>
-                {analysisData.hasAbnormalDropOff
-                  ? 'Only flagged evidence can be sent for review'
-                  : 'No flagged steps require hypothesis generation'}
-              </div>
+               <div className="text-right text-xs text-muted-foreground">
+               <div className="font-medium">
+                 {requestState === 'loading' ? 'AI reasoning in progress' : requestState === 'complete' ? 'AI reasoning complete' : requestState === 'not-needed' ? 'AI reasoning not called' : requestState === 'error' ? 'AI reasoning unavailable' : ''}
+               </div>
+               <div>
+                 {requestState === 'not-needed' ? 'No flagged step met the threshold' : requestState === 'error' ? 'Deterministic analysis remains available' : 'Numbers above are deterministic'}
+               </div>
             </div>
           </CardFooter>
         </Card>
@@ -497,6 +481,72 @@ export function FunnelBuilder() {
             </div>
           </div>
 
+          <FormField
+            control={form.control}
+            name="funnelGoal"
+            render={({ field }) => (
+              <FormItem>
+                <div className="mb-2">
+                  <label className="text-sm font-semibold">Funnel goal <span className="font-normal text-muted-foreground">(optional)</span></label>
+                  <p className="mt-1 text-xs text-muted-foreground">Tell the diagnostic what this funnel is intended to achieve.</p>
+                </div>
+                <FormControl>
+                  <Input
+                    placeholder="e.g. Increase completed purchases from qualified visitors"
+                    className="bg-card"
+                    maxLength={500}
+                    {...field}
+                  />
+                </FormControl>
+                <FormMessage className="text-xs" />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="recentChanges"
+            render={({ field }) => (
+              <FormItem>
+                <div className="mb-2">
+                  <label className="text-sm font-semibold">Recent changes <span className="font-normal text-muted-foreground">(optional)</span></label>
+                  <p className="mt-1 text-xs text-muted-foreground">Note product, campaign, pricing, or instrumentation changes that may be relevant.</p>
+                </div>
+                <FormControl>
+                  <Textarea
+                    placeholder="e.g. A new checkout flow launched last week; payment errors are suspected but not segmented."
+                    className="min-h-[72px] bg-card"
+                    maxLength={2000}
+                    {...field}
+                  />
+                </FormControl>
+                <FormMessage className="text-xs" />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="context"
+            render={({ field }) => (
+              <FormItem>
+                <div className="mb-2">
+                  <label className="text-sm font-semibold">Additional context <span className="font-normal text-muted-foreground">(optional)</span></label>
+                  <p className="mt-1 text-xs text-muted-foreground">Share other relevant business or instrumentation context. It is sent only when a meaningful drop-off is flagged.</p>
+                </div>
+                <FormControl>
+                  <Textarea
+                    placeholder="e.g. The checkout redesign launched last week; payment errors are suspected but not yet segmented."
+                    className="min-h-[88px] bg-card"
+                    maxLength={2000}
+                    {...field}
+                  />
+                </FormControl>
+                <FormMessage className="text-xs" />
+              </FormItem>
+            )}
+          />
+
           {form.formState.errors.steps?.root && (
             <div className="p-3 bg-destructive/10 text-destructive text-sm rounded-md font-medium border border-destructive/20">
               {form.formState.errors.steps.root.message}
@@ -513,4 +563,10 @@ export function FunnelBuilder() {
       </Form>
     </div>
   );
+}
+
+function isAnalysis(value: unknown): value is Analysis {
+  if (!value || typeof value !== 'object') return false;
+  const analysis = value as Partial<Analysis>;
+  return typeof analysis.status === 'string' && typeof analysis.logic === 'object' && analysis.logic !== null;
 }

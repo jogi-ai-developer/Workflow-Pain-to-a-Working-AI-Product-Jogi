@@ -41,6 +41,14 @@ export const createAnalysisBodyStepsItemConvertedMin = 0;
 export const createAnalysisBodyStepsMin = 3;
 export const createAnalysisBodyStepsMax = 6;
 
+export const createAnalysisBodyContextMax = 2000;
+
+export const createAnalysisBodyFunnelGoalMax = 500;
+
+export const createAnalysisBodyRecentChangesMax = 2000;
+
+export const createAnalysisBodyAdditionalContextMax = 2000;
+
 
 
 export const CreateAnalysisBody = zod.object({
@@ -50,7 +58,11 @@ export const CreateAnalysisBody = zod.object({
   "entered": zod.int().min(1),
   "converted": zod.int().min(createAnalysisBodyStepsItemConvertedMin),
   "description": zod.string()
-})).min(createAnalysisBodyStepsMin).max(createAnalysisBodyStepsMax)
+})).min(createAnalysisBodyStepsMin).max(createAnalysisBodyStepsMax),
+  "context": zod.string().max(createAnalysisBodyContextMax).optional().describe('Deprecated alias for additionalContext'),
+  "funnelGoal": zod.string().max(createAnalysisBodyFunnelGoalMax).optional().describe('Optional goal for the funnel being diagnosed'),
+  "recentChanges": zod.string().max(createAnalysisBodyRecentChangesMax).optional().describe('Optional recent product, campaign, or instrumentation changes'),
+  "additionalContext": zod.string().max(createAnalysisBodyAdditionalContextMax).optional().describe('Optional business or instrumentation context for hypothesis generation')
 })
 
 
@@ -67,6 +79,7 @@ export const createAnalysisResponseAiOneHypothesesMax = 3;
 
 
 export const createAnalysisResponseAiOneMissingEvidenceMax = 3;
+
 
 
 
@@ -104,6 +117,7 @@ export const CreateAnalysisResponse = zod.object({
   "hypotheses": zod.array(zod.string().min(1)).min(createAnalysisResponseAiOneHypothesesMin).max(createAnalysisResponseAiOneHypothesesMax),
   "missingEvidence": zod.array(zod.string().min(1)).min(1).max(createAnalysisResponseAiOneMissingEvidenceMax),
   "suggestedInvestigation": zod.string().min(1),
+  "recommendedInvestigation": zod.string().min(1),
   "suggestedExperiment": zod.string().min(1),
   "confidence": zod.enum(['high', 'medium', 'low']),
   "reasoning": zod.string().min(1)
@@ -141,6 +155,7 @@ export const getAnalysisResponseAiOneMissingEvidenceMax = 3;
 
 
 
+
 export const GetAnalysisResponse = zod.object({
   "id": zod.int(),
   "timestamp": zod.string(),
@@ -172,6 +187,7 @@ export const GetAnalysisResponse = zod.object({
   "hypotheses": zod.array(zod.string().min(1)).min(getAnalysisResponseAiOneHypothesesMin).max(getAnalysisResponseAiOneHypothesesMax),
   "missingEvidence": zod.array(zod.string().min(1)).min(1).max(getAnalysisResponseAiOneMissingEvidenceMax),
   "suggestedInvestigation": zod.string().min(1),
+  "recommendedInvestigation": zod.string().min(1),
   "suggestedExperiment": zod.string().min(1),
   "confidence": zod.enum(['high', 'medium', 'low']),
   "reasoning": zod.string().min(1)

@@ -5,9 +5,9 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { AiResultConfidence } from './aiResultConfidence';
+import type { HypothesisResultConfidence } from './hypothesisResultConfidence';
 
-export interface AiResult {
+export interface HypothesisResult {
   /**
      * @minItems 1
      * @maxItems 3
@@ -29,10 +29,8 @@ export interface AiResult {
   /** @minLength 1 */
   suggestedInvestigation: string;
   /** @minLength 1 */
-  recommendedInvestigation: string;
-  /** @minLength 1 */
   suggestedExperiment: string;
-  confidence: AiResultConfidence;
+  confidence: HypothesisResultConfidence;
   /** @minLength 1 */
   reasoning: string;
 }

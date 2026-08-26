@@ -126,7 +126,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AiResult"
+                $ref: "#/components/schemas/HypothesisResult"
         "400":
           description: Invalid or unflagged evidence
           content:
@@ -181,6 +181,23 @@ components:
           maxItems: 6
           items:
             $ref: "#/components/schemas/FunnelStepInput"
+        context:
+          type: string
+          description: Deprecated alias for additionalContext
+          deprecated: true
+          maxLength: 2000
+        funnelGoal:
+          type: string
+          maxLength: 500
+          description: Optional goal for the funnel being diagnosed
+        recentChanges:
+          type: string
+          maxLength: 2000
+          description: Optional recent product, campaign, or instrumentation changes
+        additionalContext:
+          type: string
+          maxLength: 2000
+          description: Optional business or instrumentation context for hypothesis generation
       required: [steps]
     StepResult:
       type: object
@@ -221,6 +238,46 @@ components:
           type: boolean
       required: [thresholdPercent, steps, flaggedSteps, hasAbnormalDropOff]
     AiResult:
+      type: object
+      properties:
+        likelyCauses:
+          type: array
+          minItems: 1
+          maxItems: 3
+          items:
+            type: string
+            minLength: 1
+        hypotheses:
+          type: array
+          minItems: 2
+          maxItems: 3
+          items:
+            type: string
+            minLength: 1
+        missingEvidence:
+          type: array
+          minItems: 1
+          maxItems: 3
+          items:
+            type: string
+            minLength: 1
+        suggestedInvestigation:
+          type: string
+          minLength: 1
+        recommendedInvestigation:
+          type: string
+          minLength: 1
+        suggestedExperiment:
+          type: string
+          minLength: 1
+        confidence:
+          type: string
+          enum: [high, medium, low]
+        reasoning:
+          type: string
+          minLength: 1
+      required: [likelyCauses, hypotheses, missingEvidence, suggestedInvestigation, recommendedInvestigation, suggestedExperiment, confidence, reasoning]
+    HypothesisResult:
       type: object
       properties:
         likelyCauses:

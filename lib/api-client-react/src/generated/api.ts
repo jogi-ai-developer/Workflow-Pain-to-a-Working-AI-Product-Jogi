@@ -21,13 +21,13 @@ import type {
 
 import type {
   AdminSummary,
-  AiResult,
   Analysis,
   AnalysisInput,
   AnalysisSummary,
   Error,
   HealthStatus,
-  HypothesisRequest
+  HypothesisRequest,
+  HypothesisResult
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -448,9 +448,9 @@ export const getGenerateHypothesesUrl = () => {
 /**
  * @summary Generate evidence-aware hypotheses for flagged funnel steps
  */
-export const generateHypotheses = async (hypothesisRequest: HypothesisRequest, options?: Parameters<typeof customFetch>[1]): Promise<AiResult> => {
+export const generateHypotheses = async (hypothesisRequest: HypothesisRequest, options?: Parameters<typeof customFetch>[1]): Promise<HypothesisResult> => {
 
-  return customFetch<AiResult>(getGenerateHypothesesUrl(),
+  return customFetch<HypothesisResult>(getGenerateHypothesesUrl(),
   {
     ...options,
     method: 'POST',

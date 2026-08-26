@@ -27,6 +27,27 @@ export interface AnalysisInput {
      * @maxItems 6
      */
   steps: FunnelStepInput[];
+  /**
+     * Deprecated alias for additionalContext
+     * @deprecated
+     * @maxLength 2000
+     */
+  context?: string;
+  /**
+     * Optional goal for the funnel being diagnosed
+     * @maxLength 500
+     */
+  funnelGoal?: string;
+  /**
+     * Optional recent product, campaign, or instrumentation changes
+     * @maxLength 2000
+     */
+  recentChanges?: string;
+  /**
+     * Optional business or instrumentation context for hypothesis generation
+     * @maxLength 2000
+     */
+  additionalContext?: string;
 }
 
 export interface StepResult {
@@ -79,8 +100,47 @@ export interface AiResult {
   /** @minLength 1 */
   suggestedInvestigation: string;
   /** @minLength 1 */
+  recommendedInvestigation: string;
+  /** @minLength 1 */
   suggestedExperiment: string;
   confidence: AiResultConfidence;
+  /** @minLength 1 */
+  reasoning: string;
+}
+
+export type HypothesisResultConfidence = typeof HypothesisResultConfidence[keyof typeof HypothesisResultConfidence];
+
+
+export const HypothesisResultConfidence = {
+  high: 'high',
+  medium: 'medium',
+  low: 'low',
+} as const;
+
+export interface HypothesisResult {
+  /**
+     * @minItems 1
+     * @maxItems 3
+     * @items.minLength 1
+     */
+  likelyCauses: string[];
+  /**
+     * @minItems 2
+     * @maxItems 3
+     * @items.minLength 1
+     */
+  hypotheses: string[];
+  /**
+     * @minItems 1
+     * @maxItems 3
+     * @items.minLength 1
+     */
+  missingEvidence: string[];
+  /** @minLength 1 */
+  suggestedInvestigation: string;
+  /** @minLength 1 */
+  suggestedExperiment: string;
+  confidence: HypothesisResultConfidence;
   /** @minLength 1 */
   reasoning: string;
 }
