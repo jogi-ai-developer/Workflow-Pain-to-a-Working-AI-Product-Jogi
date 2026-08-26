@@ -1,13 +1,17 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Form, FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Plus, Trash2, ArrowRight, Play, CheckCircle2, ListFilter, RotateCcw } from 'lucide-react';
+import { Plus, Trash2, ArrowRight, CheckCircle2, ListFilter, RotateCcw, AlertTriangle, BarChart3 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import {
+  analyzeFunnel,
+  type FunnelAnalysis,
+} from '@/lib/funnel-analysis';
 
 const stepSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -41,8 +45,7 @@ const initialSteps = [
 ];
 
 export function FunnelBuilder() {
-  const [isReady, setIsReady] = useState(false);
-  const [summaryData, setSummaryData] = useState<FormValues | null>(null);
+  const [analysisData, setAnalysisData] = useState<FunnelAnalysis | null>(null);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -83,16 +86,16 @@ export function FunnelBuilder() {
   }, [form]);
 
   const onSubmit = (data: FormValues) => {
-    setSummaryData(data);
-    setIsReady(true);
+    setAnalysisData(analyzeFunnel(data.steps));
   };
 
   const handleReset = () => {
-    setIsReady(false);
-    setSummaryData(null);
+    setAnalysisData(null);
   };
 
-  if (isReady && summaryData) {
+  if (analysisData) {
+    const flaggedCount = analysisData.flaggedSteps.length;
+
     return (
       <div className="w-full max-w-4xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
         <Card className="border-primary/20 shadow-md">
@@ -102,41 +105,123 @@ export function FunnelBuilder() {
                 <CheckCircle2 className="w-6 h-6" />
               </div>
               <div>
-                <CardTitle className="text-xl">Funnel Ready for Analysis</CardTitle>
+                <CardTitle className="text-xl">Deterministic Analysis Complete</CardTitle>
                 <CardDescription>
-                  Your funnel configuration is valid and ready to be processed.
+                  The logic layer calculated the funnel signals without sending an API request.
                 </CardDescription>
               </div>
             </div>
           </CardHeader>
           <CardContent className="pt-6">
-            <div className="space-y-4">
-              <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">Step Summary</h3>
-              <div className="grid gap-2">
-                {summaryData.steps.map((step, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 bg-secondary/50 rounded-lg border border-border/50">
-                    <div className="flex items-center gap-4">
-                      <Badge variant="outline" className="w-6 h-6 p-0 flex items-center justify-center rounded-full font-mono text-xs">
-                        {step.order}
-                      </Badge>
-                      <div>
-                        <div className="font-medium text-sm">{step.name}</div>
-                        {step.description && <div className="text-xs text-muted-foreground">{step.description}</div>}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-6 text-sm font-mono">
-                      <div className="text-right">
-                        <div className="text-muted-foreground text-xs uppercase tracking-wider font-sans mb-1">Entered</div>
-                        <div>{step.entered.toLocaleString()}</div>
-                      </div>
-                      <ArrowRight className="w-4 h-4 text-muted-foreground/50 mt-4" />
-                      <div className="text-right">
-                        <div className="text-muted-foreground text-xs uppercase tracking-wider font-sans mb-1">Converted</div>
-                        <div className="font-semibold text-primary">{step.converted.toLocaleString()}</div>
-                      </div>
-                    </div>
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                <div className="rounded-lg border border-border/60 bg-secondary/40 p-4">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Steps analyzed</div>
+                  <div className="mt-1 font-mono text-2xl font-semibold">{analysisData.steps.length}</div>
+                </div>
+                <div className="rounded-lg border border-border/60 bg-secondary/40 p-4">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Flagged steps</div>
+                  <div className="mt-1 font-mono text-2xl font-semibold">{flaggedCount}</div>
+                </div>
+                <div className="col-span-2 rounded-lg border border-border/60 bg-secondary/40 p-4 sm:col-span-1">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Flag threshold</div>
+                  <div className="mt-1 font-mono text-2xl font-semibold">{analysisData.thresholdPercent}%</div>
+                </div>
+              </div>
+
+              <div
+                className={
+                  analysisData.hasAbnormalDropOff
+                    ? "flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4"
+                    : "flex items-start gap-3 rounded-lg border border-success/30 bg-success/10 p-4"
+                }
+                role="status"
+              >
+                {analysisData.hasAbnormalDropOff ? (
+                  <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+                ) : (
+                  <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-success" />
+                )}
+                <div>
+                  <div className="font-semibold">
+                    {analysisData.hasAbnormalDropOff
+                      ? `${flaggedCount} meaningful drop-off${flaggedCount === 1 ? '' : 's'} detected`
+                      : 'No meaningful drop-off detected'}
                   </div>
-                ))}
+                  <div className="mt-1 text-sm text-muted-foreground">
+                    {analysisData.hasAbnormalDropOff
+                      ? `${analysisData.flaggedSteps.join(', ')} ${flaggedCount === 1 ? 'is' : 'are'} at or above the ${analysisData.thresholdPercent}% drop-off threshold.`
+                      : `Every step is below the ${analysisData.thresholdPercent}% drop-off threshold, so no AI reasoning is needed.`}
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <BarChart3 className="h-4 w-4 text-primary" />
+                  <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Step-by-step evidence</h3>
+                </div>
+                <div className="grid gap-3">
+                  {analysisData.steps.map((step) => (
+                    <div
+                      key={step.order}
+                      className={
+                        step.isAbnormal
+                          ? "rounded-lg border border-amber-500/30 bg-amber-500/5 p-4"
+                          : "rounded-lg border border-border/50 bg-secondary/50 p-4"
+                      }
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="flex items-start gap-3">
+                          <Badge
+                            variant={step.isAbnormal ? "default" : "outline"}
+                            className={
+                              step.isAbnormal
+                                ? "h-6 w-6 rounded-full bg-amber-500 p-0 text-white"
+                                : "h-6 w-6 rounded-full p-0"
+                            }
+                          >
+                            {step.order}
+                          </Badge>
+                          <div>
+                            <div className="font-medium text-sm">{step.name}</div>
+                            {step.description && <div className="text-xs text-muted-foreground">{step.description}</div>}
+                          </div>
+                        </div>
+                        <Badge variant={step.isAbnormal ? "default" : "secondary"}>
+                          {step.isAbnormal ? "Flagged" : "Within threshold"}
+                        </Badge>
+                      </div>
+
+                      <div className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+                        <div>
+                          <div className="text-xs uppercase tracking-wider text-muted-foreground">Entered → converted</div>
+                          <div className="mt-1 font-mono">{step.entered.toLocaleString()} → {step.converted.toLocaleString()}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs uppercase tracking-wider text-muted-foreground">Conversion rate</div>
+                          <div className="mt-1 font-mono font-semibold">{step.conversionRate.toFixed(2)}%</div>
+                        </div>
+                        <div>
+                          <div className="text-xs uppercase tracking-wider text-muted-foreground">Drop-off</div>
+                          <div className={step.isAbnormal ? "mt-1 font-mono font-semibold text-amber-700" : "mt-1 font-mono font-semibold"}>
+                            {step.dropOffPercent.toFixed(2)}%
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-xs uppercase tracking-wider text-muted-foreground">Users lost</div>
+                          <div className="mt-1 font-mono font-semibold">{step.usersLost.toLocaleString()}</div>
+                        </div>
+                      </div>
+
+                      {step.isAbnormal && (
+                        <div className="mt-3 border-t border-amber-500/20 pt-3 text-xs text-amber-800">
+                          Flagged because {step.dropOffPercent.toFixed(2)}% of users were lost at this step, meeting the {analysisData.thresholdPercent}% threshold.
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </CardContent>
@@ -145,15 +230,17 @@ export function FunnelBuilder() {
               <RotateCcw className="w-4 h-4 mr-2" />
               Edit Steps
             </Button>
-            <Button size="lg" className="font-semibold shadow-md active-elevate" disabled>
-              Run Diagnostic Analysis
-              <Play className="w-4 h-4 ml-2" />
-            </Button>
+            <div className="text-right text-xs text-muted-foreground">
+              <div className="font-medium">AI reasoning not called</div>
+              <div>Reserved for the next phase</div>
+            </div>
           </CardFooter>
         </Card>
-        <p className="text-center text-sm text-muted-foreground">
-          Analysis execution is disabled for this diagnostic phase.
-        </p>
+        {analysisData.largestDropOffStep && (
+          <p className="text-center text-sm text-muted-foreground">
+            Largest calculated drop-off: <span className="font-medium text-foreground">{analysisData.largestDropOffStep}</span>
+          </p>
+        )}
       </div>
     );
   }
