@@ -1,4 +1,7 @@
 import { FunnelBuilder } from '@/components/funnel/FunnelBuilder';
+import { ArrowUpRight } from 'lucide-react';
+import { Link } from 'wouter';
+import { Button } from '@/components/ui/button';
 
 export default function Home() {
   return (
@@ -10,6 +13,12 @@ export default function Home() {
           </div>
           <div className="font-semibold text-lg tracking-tight">Drop-off Diagnostic</div>
           <div className="ml-auto flex items-center gap-4 text-sm font-medium text-muted-foreground">
+            <Link href="/admin">
+              <Button variant="ghost" size="sm" className="hidden sm:inline-flex">
+                Admin
+                <ArrowUpRight className="h-3.5 w-3.5" />
+              </Button>
+            </Link>
             <span className="hidden sm:inline-block">Phase 3: Evidence-aware hypotheses</span>
             <div className="h-2 w-2 rounded-full bg-success"></div>
           </div>
