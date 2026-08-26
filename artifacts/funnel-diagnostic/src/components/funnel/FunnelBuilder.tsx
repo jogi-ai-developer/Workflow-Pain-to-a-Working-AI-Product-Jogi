@@ -7,9 +7,9 @@ import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Trash2, ArrowRight, CheckCircle2, ListFilter, RotateCcw, AlertTriangle, BarChart3, Brain, FlaskConical } from 'lucide-react';
+import { Plus, Trash2, ArrowRight, CheckCircle2, ListFilter, RotateCcw, RefreshCw, AlertTriangle, BarChart3, Brain, FlaskConical } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { createAnalysis, type Analysis } from '@workspace/api-client-react';
+import { createAnalysis, getAnalysis, retryAnalysis, type Analysis, type AnalysisInput } from '@workspace/api-client-react';
 import {
   analyzeFunnel,
   type FunnelAnalysis,
@@ -50,11 +50,18 @@ const initialSteps = [
   { name: 'Purchased', order: 3, entered: 2000, converted: 150, description: 'Completed checkout' },
 ];
 
-export function FunnelBuilder() {
+type FunnelBuilderProps = {
+  analysisId?: number;
+  onAnalysisSaved?: (id: number) => void;
+};
+
+export function FunnelBuilder({ analysisId, onAnalysisSaved }: FunnelBuilderProps = {}) {
   const [analysisData, setAnalysisData] = useState<FunnelAnalysis | null>(null);
   const [serverAnalysis, setServerAnalysis] = useState<Analysis | null>(null);
+  const [analysisInput, setAnalysisInput] = useState<AnalysisInput | null>(null);
   const [requestState, setRequestState] = useState<'idle' | 'loading' | 'complete' | 'not-needed' | 'error'>('idle');
   const [requestError, setRequestError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -97,24 +104,109 @@ export function FunnelBuilder() {
     return () => subscription.unsubscribe();
   }, [form]);
 
+  useEffect(() => {
+    if (analysisId === undefined) return;
+
+    let active = true;
+    let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const loadSavedAnalysis = async () => {
+      try {
+        const result = await getAnalysis(analysisId);
+        if (!active) return;
+
+        setServerAnalysis(result);
+        setAnalysisInput(result.input);
+        setAnalysisData(analyzeFunnel(result.steps));
+        setRequestError(result.errorMessage);
+        setLoadError(null);
+        setRequestState(
+          result.status === 'ok'
+            ? 'complete'
+            : result.status === 'no-flag'
+              ? 'not-needed'
+              : result.status === 'loading'
+                ? 'loading'
+                : 'error',
+        );
+
+        if (result.status === 'loading') {
+          refreshTimer = setTimeout(loadSavedAnalysis, 2000);
+        }
+      } catch (error) {
+        if (!active) return;
+        setLoadError(error instanceof Error ? error.message : 'The saved analysis could not be loaded.');
+      }
+    };
+
+    setLoadError(null);
+    setRequestState('loading');
+    void loadSavedAnalysis();
+
+    return () => {
+      active = false;
+      if (refreshTimer) clearTimeout(refreshTimer);
+    };
+  }, [analysisId]);
+
+  const requestAnalysis = async (input: AnalysisInput) => {
+    setRequestState('loading');
+    setRequestError(null);
+
+    try {
+      const result = await createAnalysis(input);
+      setServerAnalysis(result);
+      setRequestState(result.status === 'ok' ? 'complete' : 'error');
+      if (result.errorMessage) {
+        setRequestError(result.errorMessage);
+      }
+      onAnalysisSaved?.(result.id);
+    } catch (error) {
+      const responseData = (error as { data?: unknown }).data;
+      if (isAnalysis(responseData)) {
+        setServerAnalysis(responseData);
+        setRequestError(responseData.errorMessage);
+        onAnalysisSaved?.(responseData.id);
+      } else {
+        setRequestError(error instanceof Error ? error.message : 'The hypothesis service could not be reached.');
+      }
+      setRequestState('error');
+    }
+  };
+
   const onSubmit = async (data: FormValues) => {
     const deterministic = analyzeFunnel(data.steps);
     setAnalysisData(deterministic);
     setServerAnalysis(null);
     setRequestError(null);
+    const input: AnalysisInput = {
+      steps: data.steps,
+      ...(data.funnelGoal?.trim() ? { funnelGoal: data.funnelGoal.trim() } : {}),
+      ...(data.recentChanges?.trim() ? { recentChanges: data.recentChanges.trim() } : {}),
+      ...(data.context?.trim() ? { additionalContext: data.context.trim() } : {}),
+    };
+    setAnalysisInput(input);
 
     if (!deterministic.hasAbnormalDropOff) {
       setRequestState('not-needed');
       return;
     }
 
+    await requestAnalysis(input);
+  };
+
+  const handleRetry = async () => {
+    if (!serverAnalysis || requestState === 'loading') return;
+    const retryInput = analysisInput ?? serverAnalysis.input;
+    if (!retryInput) return;
+
     setRequestState('loading');
+    setRequestError(null);
     try {
-      const result = await createAnalysis({
-        steps: data.steps,
-        ...(data.funnelGoal?.trim() ? { funnelGoal: data.funnelGoal.trim() } : {}),
-        ...(data.recentChanges?.trim() ? { recentChanges: data.recentChanges.trim() } : {}),
-        ...(data.context?.trim() ? { additionalContext: data.context.trim() } : {}),
+      const result = await retryAnalysis(serverAnalysis.id, {
+        ...(retryInput.funnelGoal ? { funnelGoal: retryInput.funnelGoal } : {}),
+        ...(retryInput.recentChanges ? { recentChanges: retryInput.recentChanges } : {}),
+        ...(retryInput.additionalContext ? { additionalContext: retryInput.additionalContext } : {}),
       });
       setServerAnalysis(result);
       setRequestState(result.status === 'ok' ? 'complete' : 'error');
@@ -136,9 +228,33 @@ export function FunnelBuilder() {
   const handleReset = () => {
     setAnalysisData(null);
     setServerAnalysis(null);
+    setAnalysisInput(null);
     setRequestState('idle');
     setRequestError(null);
+    setLoadError(null);
   };
+
+  if (analysisId !== undefined && loadError) {
+    return (
+      <div className="mx-auto w-full max-w-2xl rounded-xl border border-destructive/25 bg-destructive/10 p-6 text-destructive" role="alert">
+        <div className="flex items-start gap-3">
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+          <div>
+            <h1 className="font-semibold">Saved analysis unavailable</h1>
+            <p className="mt-1 text-sm">{loadError}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (analysisId !== undefined && !analysisData) {
+    return (
+      <div className="mx-auto w-full max-w-2xl rounded-xl border border-border/60 bg-card p-6 text-sm text-muted-foreground" role="status" aria-live="polite">
+        Loading saved analysis…
+      </div>
+    );
+  }
 
   if (analysisData) {
     const flaggedCount = analysisData.flaggedSteps.length;
@@ -287,15 +403,29 @@ export function FunnelBuilder() {
                       </p>
 
                       {requestState === 'loading' && (
-                        <div className="mt-4 rounded-md border border-border/60 bg-background/70 p-4 text-sm text-muted-foreground">
+                        <div className="mt-4 rounded-md border border-border/60 bg-background/70 p-4 text-sm text-muted-foreground" role="status" aria-live="polite">
                           Checking the flagged step for plausible explanations and the most useful next evidence…
                         </div>
                       )}
 
                       {requestError && (
-                        <div className="mt-4 flex items-start gap-2 rounded-md border border-destructive/25 bg-destructive/10 p-3 text-sm text-destructive" role="alert">
+                        <div className="mt-4 flex items-start justify-between gap-3 rounded-md border border-destructive/25 bg-destructive/10 p-3 text-sm text-destructive" role="alert">
+                          <div className="flex min-w-0 items-start gap-2">
                           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                          <span>Hypothesis generation failed: {requestError}. The deterministic evidence above is still valid.</span>
+                            <span>Hypothesis generation failed: {requestError}. The deterministic evidence above is still valid.</span>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="shrink-0 border-destructive/30 text-destructive hover:bg-destructive/10"
+                            onClick={handleRetry}
+                            disabled={requestState === 'loading'}
+                            aria-label="Retry hypothesis generation"
+                          >
+                            <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                            Retry
+                          </Button>
                         </div>
                       )}
 

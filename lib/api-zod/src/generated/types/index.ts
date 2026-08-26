@@ -13,6 +13,7 @@ export * from './aiResultConfidence';
 export * from './analysis';
 export * from './analysisConfidence';
 export * from './analysisInput';
+export * from './analysisRetryInput';
 export * from './analysisStatus';
 export * from './analysisSummary';
 export * from './analysisSummaryConfidence';

@@ -10,6 +10,7 @@ export type AnalysisSummaryStatus = typeof AnalysisSummaryStatus[keyof typeof An
 
 
 export const AnalysisSummaryStatus = {
+  loading: 'loading',
   ok: 'ok',
   'no-flag': 'no-flag',
   'api-error': 'api-error',

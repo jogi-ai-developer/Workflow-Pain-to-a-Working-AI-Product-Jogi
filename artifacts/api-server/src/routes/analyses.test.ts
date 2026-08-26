@@ -8,7 +8,14 @@ app.use(express.json());
 app.use(analysesRouter);
 
 type ApiResponse = {
+  id: number;
   status: string;
+  input: {
+    steps: Array<{ name: string; [key: string]: unknown }>;
+    funnelGoal?: string;
+    recentChanges?: string;
+    additionalContext?: string;
+  };
   ai: { hypotheses: string[] } | null;
   errorMessage: string | null;
   logic: {
@@ -57,6 +64,49 @@ async function postAnalysis(body: unknown) {
   }
 }
 
+async function postRetry(id: number, body: unknown) {
+  const server = app.listen(0);
+  try {
+    const address = server.address();
+    if (!address || typeof address === 'string') {
+      throw new Error('Test server did not bind to a port');
+    }
+    return await nativeFetch(`http://127.0.0.1:${address.port}/analyses/${id}/retry`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } finally {
+    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  }
+}
+
+async function getAnalysis(id: number) {
+  const server = app.listen(0);
+  try {
+    const address = server.address();
+    if (!address || typeof address === 'string') {
+      throw new Error('Test server did not bind to a port');
+    }
+    return await nativeFetch(`http://127.0.0.1:${address.port}/analyses/${id}`);
+  } finally {
+    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  }
+}
+
+async function getAnalysisSummaries() {
+  const server = app.listen(0);
+  try {
+    const address = server.address();
+    if (!address || typeof address === 'string') {
+      throw new Error('Test server did not bind to a port');
+    }
+    return await nativeFetch(`http://127.0.0.1:${address.port}/analyses`);
+  } finally {
+    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  }
+}
+
 async function readBody(response: Response): Promise<ApiResponse> {
   return await response.json() as ApiResponse;
 }
@@ -97,6 +147,7 @@ describe('POST /analyses', () => {
     expect(body.status).toBe('no-flag');
     expect(body.ai).toBeNull();
     expect(body.errorMessage).toBeNull();
+    expect(body.input.steps).toEqual(noFlagSteps);
     expect(body.logic.flaggedSteps).toEqual([]);
     expect(body.logic.steps[1]).toMatchObject({
       name: 'Signup form',
@@ -173,12 +224,38 @@ describe('POST /analyses', () => {
     expect(body.status).toBe('api-error');
     expect(body.ai).toBeNull();
     expect(body.errorMessage).toBe('AI service returned HTTP 503');
+    expect(body.input.steps).toEqual(flaggedSteps);
     expect(body.logic.flaggedSteps).toEqual(['Checkout']);
     expect(body.logic.steps[1]).toMatchObject({
       name: 'Checkout',
       isAbnormal: true,
       usersLost: 600,
     });
+  });
+
+  test('persists the loading state while hypothesis generation is in progress', async () => {
+    let resolveAI: (response: Response) => void = () => {};
+    const pendingResponse = new Promise<Response>((resolve) => {
+      resolveAI = resolve;
+    });
+    const fetchMock = vi.fn(() => pendingResponse);
+    globalThis.fetch = fetchMock;
+    const beforeResponse = await getAnalysisSummaries();
+    const before = await beforeResponse.json() as Array<{ id: number }>;
+    const existingIds = new Set(before.map((analysis) => analysis.id));
+
+    const analysisPromise = postAnalysis({ steps: flaggedSteps });
+    for (let attempt = 0; attempt < 100 && fetchMock.mock.calls.length === 0; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    const summaries = await getAnalysisSummaries().then((response) => response.json()) as Array<{ id: number; status: string }>;
+    const loadingSummary = summaries.find((analysis) => !existingIds.has(analysis.id) && analysis.status === 'loading');
+    expect(loadingSummary).toBeDefined();
+
+    resolveAI(new Response('upstream unavailable', { status: 503 }));
+    const response = await analysisPromise;
+    expect(response.status).toBe(502);
   });
 
   test('retains deterministic results and exposes an error for malformed AI JSON', async () => {
@@ -193,11 +270,55 @@ describe('POST /analyses', () => {
     expect(body.status).toBe('ai-parse-error');
     expect(body.ai).toBeNull();
     expect(body.errorMessage).toBe('AI service returned malformed JSON');
+    expect(body.input.steps).toEqual(flaggedSteps);
     expect(body.logic.hasAbnormalDropOff).toBe(true);
     expect(body.logic.steps.map((step) => step.name)).toEqual([
       'Landing page',
       'Checkout',
       'Confirmation',
     ]);
+  });
+
+  test('retries a failed analysis using its saved logic and updates the same record', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response('upstream unavailable', { status: 503 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        choices: [{ message: { content: JSON.stringify(aiResponse) } }],
+      }), { status: 200 }));
+    globalThis.fetch = fetchMock;
+
+    const initialResponse = await postAnalysis({
+      steps: flaggedSteps,
+      funnelGoal: 'Increase completed purchases',
+      recentChanges: 'Checkout redesign launched last week',
+      additionalContext: 'Payment errors are suspected',
+    });
+    const failedBody = await readBody(initialResponse);
+    const reopenedBody = await getAnalysis(failedBody.id).then(readBody);
+    const retryResponse = await postRetry(failedBody.id, {});
+    const retriedBody = await readBody(retryResponse);
+
+    expect(initialResponse.status).toBe(502);
+    expect(retryResponse.status).toBe(200);
+    expect(retriedBody.id).toBe(failedBody.id);
+    expect(failedBody.input).toEqual({
+      steps: flaggedSteps,
+      funnelGoal: 'Increase completed purchases',
+      recentChanges: 'Checkout redesign launched last week',
+      additionalContext: 'Payment errors are suspected',
+    });
+    expect(reopenedBody.status).toBe('api-error');
+    expect(reopenedBody.input).toEqual(failedBody.input);
+    expect(retriedBody.status).toBe('ok');
+    expect(retriedBody.errorMessage).toBeNull();
+    expect(retriedBody.logic).toEqual(failedBody.logic);
+    expect(retriedBody.ai?.hypotheses).toEqual(aiResponse.hypotheses);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    const retryRequest = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body));
+    const retryContext = JSON.parse(retryRequest.messages[1].content).diagnosticContext;
+    expect(retryContext.funnelGoal).toBe('Increase completed purchases');
+    expect(retryContext.recentChanges).toBe('Checkout redesign launched last week');
+    expect(retryContext.additionalContext).toBe('Payment errors are suspected');
   });
 });

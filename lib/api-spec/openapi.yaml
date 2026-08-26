@@ -97,6 +97,48 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /analyses/{id}/retry:
+    post:
+      operationId: retryAnalysis
+      tags: [analyses]
+      summary: Retry AI hypotheses for a failed funnel analysis
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnalysisRetryInput"
+      responses:
+        "200":
+          description: Analysis with regenerated hypotheses
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Analysis"
+        "400":
+          description: Invalid retry request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Analysis not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "502":
+          description: Analysis service unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Analysis"
   /admin/summary:
     get:
       operationId: getAdminSummary
@@ -334,6 +376,8 @@ components:
           type: integer
         timestamp:
           type: string
+        input:
+          $ref: "#/components/schemas/AnalysisInput"
         steps:
           type: array
           items:
@@ -349,10 +393,25 @@ components:
           enum: [high, medium, low]
         status:
           type: string
-          enum: [ok, no-flag, api-error, ai-parse-error]
+          enum: [loading, ok, no-flag, api-error, ai-parse-error]
         errorMessage:
           type: ["string", "null"]
-      required: [id, timestamp, steps, logic, ai, confidence, status, errorMessage]
+      required: [id, timestamp, input, steps, logic, ai, confidence, status, errorMessage]
+    AnalysisRetryInput:
+      type: object
+      properties:
+        funnelGoal:
+          type: string
+          maxLength: 500
+          description: Optional goal for the funnel being diagnosed
+        recentChanges:
+          type: string
+          maxLength: 2000
+          description: Optional recent product, campaign, or instrumentation changes
+        additionalContext:
+          type: string
+          maxLength: 2000
+          description: Optional business or instrumentation context for hypothesis generation
     AnalysisSummary:
       type: object
       properties:
@@ -369,7 +428,7 @@ components:
           enum: [high, medium, low]
         status:
           type: string
-          enum: [ok, no-flag, api-error, ai-parse-error]
+          enum: [loading, ok, no-flag, api-error, ai-parse-error]
       required: [id, timestamp, flaggedSteps, confidence, status]
     AdminSummary:
       type: object

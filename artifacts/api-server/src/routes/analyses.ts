@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import {
   CreateAnalysisBody,
+  RetryAnalysisBody,
   type Analysis,
   type AnalysisInput,
   type FunnelStepInput,
@@ -72,6 +73,16 @@ function toAiResult(result: z.infer<typeof aiResponseSchema>) {
     suggestedExperiment: result.suggested_experiment,
     confidence: result.confidence,
     reasoning: result.reasoning,
+  };
+}
+
+function normalizeInput(input: AnalysisInput): AnalysisInput {
+  const additionalContext = input.additionalContext?.trim() || input.context?.trim();
+  return {
+    steps: input.steps,
+    ...(input.funnelGoal?.trim() ? { funnelGoal: input.funnelGoal.trim() } : {}),
+    ...(input.recentChanges?.trim() ? { recentChanges: input.recentChanges.trim() } : {}),
+    ...(additionalContext ? { additionalContext } : {}),
   };
 }
 
@@ -178,10 +189,12 @@ async function generateHypotheses(
 type StoredAnalysis = typeof analysesTable.$inferSelect;
 
 function deserializeAnalysis(row: StoredAnalysis): Analysis {
+  const steps = row.steps as Analysis["steps"];
   return {
     id: row.id,
     timestamp: row.timestamp,
-    steps: row.steps as Analysis["steps"],
+    input: (row.input as Analysis["input"] | null) ?? { steps },
+    steps,
     logic: row.logic as Analysis["logic"],
     ai: row.ai as Analysis["ai"],
     confidence: row.confidence as Analysis["confidence"],
@@ -191,7 +204,7 @@ function deserializeAnalysis(row: StoredAnalysis): Analysis {
 }
 
 async function saveAnalysis(
-  steps: FunnelStepInput[],
+  input: AnalysisInput,
   logic: ReturnType<typeof calculateLogic>,
   ai: Analysis["ai"],
   status: Analysis["status"],
@@ -201,7 +214,8 @@ async function saveAnalysis(
     .insert(analysesTable)
     .values({
       timestamp: new Date().toISOString(),
-      steps,
+      input,
+      steps: input.steps,
       logic,
       ai,
       confidence: ai?.confidence ?? "low",
@@ -214,6 +228,31 @@ async function saveAnalysis(
     throw new Error("Failed to save analysis");
   }
   return deserializeAnalysis(row);
+}
+
+async function updateAnalysis(
+  id: number,
+  values: {
+    input?: AnalysisInput;
+    ai: Analysis["ai"];
+    confidence: Analysis["confidence"];
+    status: Analysis["status"];
+    errorMessage: string | null;
+  },
+): Promise<Analysis | null> {
+  const [row] = await db
+    .update(analysesTable)
+    .set({
+      ...(values.input ? { input: values.input, steps: values.input.steps } : {}),
+      timestamp: new Date().toISOString(),
+      ai: values.ai,
+      confidence: values.confidence,
+      status: values.status,
+      errorMessage: values.errorMessage,
+    })
+    .where(eq(analysesTable.id, id))
+    .returning();
+  return row ? deserializeAnalysis(row) : null;
 }
 
 function toSummary(analysis: Analysis) {
@@ -244,25 +283,130 @@ router.post("/analyses", async (req, res): Promise<void> => {
     return;
   }
 
-  const logic = calculateLogic(parsed.data.steps);
+  const input = normalizeInput(parsed.data);
+  const logic = calculateLogic(input.steps);
   if (!logic.hasAbnormalDropOff) {
     res
       .status(201)
-      .json(await saveAnalysis(parsed.data.steps, logic, null, "no-flag", null));
+      .json(await saveAnalysis(input, logic, null, "no-flag", null));
     return;
   }
 
+  const saved = await saveAnalysis(input, logic, null, "loading", null);
   try {
-    const ai = await generateHypotheses(logic, parsed.data);
-    res
-      .status(201)
-      .json(await saveAnalysis(parsed.data.steps, logic, ai, "ok", null));
+    const ai = await generateHypotheses(logic, input);
+    const analysis = await updateAnalysis(saved.id, {
+      ai,
+      confidence: ai.confidence,
+      status: "ok",
+      errorMessage: null,
+    });
+    if (!analysis) {
+      res.status(404).json({ error: "Analysis not found" });
+      return;
+    }
+    res.status(201).json(analysis);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown AI service failure";
     const status = message.includes("malformed JSON") || message.includes("invalid hypothesis shape") || message.includes("no JSON message")
       ? "ai-parse-error"
       : "api-error";
-    const analysis = await saveAnalysis(parsed.data.steps, logic, null, status, message);
+    const analysis = await updateAnalysis(saved.id, {
+      ai: null,
+      confidence: "low",
+      status,
+      errorMessage: message,
+    });
+    if (!analysis) {
+      res.status(404).json({ error: "Analysis not found" });
+      return;
+    }
+    res.status(502).json(analysis);
+  }
+});
+
+router.post("/analyses/:id/retry", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) {
+    res.status(404).json({ error: "Analysis not found" });
+    return;
+  }
+
+  const parsed = RetryAnalysisBody.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const [row] = await db
+    .select()
+    .from(analysesTable)
+    .where(eq(analysesTable.id, id))
+    .limit(1);
+  if (!row) {
+    res.status(404).json({ error: "Analysis not found" });
+    return;
+  }
+
+  if (row.status !== "api-error" && row.status !== "ai-parse-error") {
+    res.status(400).json({ error: "Only failed analyses can be retried" });
+    return;
+  }
+
+  const logic = row.logic as ReturnType<typeof calculateLogic>;
+  if (!logic.hasAbnormalDropOff) {
+    res.status(400).json({ error: "Only analyses with flagged funnel steps can be retried" });
+    return;
+  }
+
+  const input = normalizeInput({
+    steps: row.steps as AnalysisInput["steps"],
+    ...(row.input as Partial<AnalysisInput> | null),
+    ...parsed.data,
+  });
+
+  const loadingAnalysis = await updateAnalysis(id, {
+    input,
+    ai: null,
+    confidence: "low",
+    status: "loading",
+    errorMessage: null,
+  });
+  if (!loadingAnalysis) {
+    res.status(404).json({ error: "Analysis not found" });
+    return;
+  }
+
+  try {
+    const ai = await generateHypotheses(logic, input);
+    const analysis = await updateAnalysis(id, {
+      ai,
+      confidence: ai.confidence,
+      status: "ok",
+      errorMessage: null,
+    });
+    if (!analysis) {
+      res.status(404).json({ error: "Analysis not found" });
+      return;
+    }
+
+    res.json(analysis);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown AI service failure";
+    const status = message.includes("malformed JSON") || message.includes("invalid hypothesis shape") || message.includes("no JSON message")
+      ? "ai-parse-error"
+      : "api-error";
+    const analysis = await updateAnalysis(id, {
+      ai: null,
+      confidence: "low",
+      status,
+      errorMessage: message,
+    });
+    if (!analysis) {
+      res.status(404).json({ error: "Analysis not found" });
+      return;
+    }
+
     res.status(502).json(analysis);
   }
 });

@@ -25,7 +25,7 @@ export const ListAnalysesResponseItem = zod.object({
   "timestamp": zod.string(),
   "flaggedSteps": zod.array(zod.string()),
   "confidence": zod.enum(['high', 'medium', 'low']),
-  "status": zod.enum(['ok', 'no-flag', 'api-error', 'ai-parse-error'])
+  "status": zod.enum(['loading', 'ok', 'no-flag', 'api-error', 'ai-parse-error'])
 })
 export const ListAnalysesResponse = zod.array(ListAnalysesResponseItem)
 
@@ -68,6 +68,22 @@ export const CreateAnalysisBody = zod.object({
 
 
 
+export const createAnalysisResponseInputStepsItemConvertedMin = 0;
+
+export const createAnalysisResponseInputStepsMin = 3;
+export const createAnalysisResponseInputStepsMax = 6;
+
+export const createAnalysisResponseInputContextMax = 2000;
+
+export const createAnalysisResponseInputFunnelGoalMax = 500;
+
+export const createAnalysisResponseInputRecentChangesMax = 2000;
+
+export const createAnalysisResponseInputAdditionalContextMax = 2000;
+
+
+
+
 export const createAnalysisResponseStepsItemConvertedMin = 0;
 
 
@@ -89,6 +105,19 @@ export const createAnalysisResponseAiOneMissingEvidenceMax = 3;
 export const CreateAnalysisResponse = zod.object({
   "id": zod.int(),
   "timestamp": zod.string(),
+  "input": zod.object({
+  "steps": zod.array(zod.object({
+  "name": zod.string().min(1),
+  "order": zod.int().min(1),
+  "entered": zod.int().min(1),
+  "converted": zod.int().min(createAnalysisResponseInputStepsItemConvertedMin),
+  "description": zod.string()
+})).min(createAnalysisResponseInputStepsMin).max(createAnalysisResponseInputStepsMax),
+  "context": zod.string().max(createAnalysisResponseInputContextMax).optional().describe('Deprecated alias for additionalContext'),
+  "funnelGoal": zod.string().max(createAnalysisResponseInputFunnelGoalMax).optional().describe('Optional goal for the funnel being diagnosed'),
+  "recentChanges": zod.string().max(createAnalysisResponseInputRecentChangesMax).optional().describe('Optional recent product, campaign, or instrumentation changes'),
+  "additionalContext": zod.string().max(createAnalysisResponseInputAdditionalContextMax).optional().describe('Optional business or instrumentation context for hypothesis generation')
+}),
   "steps": zod.array(zod.object({
   "name": zod.string().min(1),
   "order": zod.int().min(1),
@@ -123,7 +152,7 @@ export const CreateAnalysisResponse = zod.object({
   "reasoning": zod.string().min(1)
 }),zod.null()]),
   "confidence": zod.enum(['high', 'medium', 'low']),
-  "status": zod.enum(['ok', 'no-flag', 'api-error', 'ai-parse-error']),
+  "status": zod.enum(['loading', 'ok', 'no-flag', 'api-error', 'ai-parse-error']),
   "errorMessage": zod.string().nullable()
 })
 
@@ -134,6 +163,22 @@ export const CreateAnalysisResponse = zod.object({
 export const GetAnalysisParams = zod.object({
   "id": zod.coerce.number().int()
 })
+
+
+
+
+export const getAnalysisResponseInputStepsItemConvertedMin = 0;
+
+export const getAnalysisResponseInputStepsMin = 3;
+export const getAnalysisResponseInputStepsMax = 6;
+
+export const getAnalysisResponseInputContextMax = 2000;
+
+export const getAnalysisResponseInputFunnelGoalMax = 500;
+
+export const getAnalysisResponseInputRecentChangesMax = 2000;
+
+export const getAnalysisResponseInputAdditionalContextMax = 2000;
 
 
 
@@ -159,6 +204,19 @@ export const getAnalysisResponseAiOneMissingEvidenceMax = 3;
 export const GetAnalysisResponse = zod.object({
   "id": zod.int(),
   "timestamp": zod.string(),
+  "input": zod.object({
+  "steps": zod.array(zod.object({
+  "name": zod.string().min(1),
+  "order": zod.int().min(1),
+  "entered": zod.int().min(1),
+  "converted": zod.int().min(getAnalysisResponseInputStepsItemConvertedMin),
+  "description": zod.string()
+})).min(getAnalysisResponseInputStepsMin).max(getAnalysisResponseInputStepsMax),
+  "context": zod.string().max(getAnalysisResponseInputContextMax).optional().describe('Deprecated alias for additionalContext'),
+  "funnelGoal": zod.string().max(getAnalysisResponseInputFunnelGoalMax).optional().describe('Optional goal for the funnel being diagnosed'),
+  "recentChanges": zod.string().max(getAnalysisResponseInputRecentChangesMax).optional().describe('Optional recent product, campaign, or instrumentation changes'),
+  "additionalContext": zod.string().max(getAnalysisResponseInputAdditionalContextMax).optional().describe('Optional business or instrumentation context for hypothesis generation')
+}),
   "steps": zod.array(zod.object({
   "name": zod.string().min(1),
   "order": zod.int().min(1),
@@ -193,7 +251,120 @@ export const GetAnalysisResponse = zod.object({
   "reasoning": zod.string().min(1)
 }),zod.null()]),
   "confidence": zod.enum(['high', 'medium', 'low']),
-  "status": zod.enum(['ok', 'no-flag', 'api-error', 'ai-parse-error']),
+  "status": zod.enum(['loading', 'ok', 'no-flag', 'api-error', 'ai-parse-error']),
+  "errorMessage": zod.string().nullable()
+})
+
+
+/**
+ * @summary Retry AI hypotheses for a failed funnel analysis
+ */
+export const RetryAnalysisParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const retryAnalysisBodyFunnelGoalMax = 500;
+
+export const retryAnalysisBodyRecentChangesMax = 2000;
+
+export const retryAnalysisBodyAdditionalContextMax = 2000;
+
+
+
+export const RetryAnalysisBody = zod.object({
+  "funnelGoal": zod.string().max(retryAnalysisBodyFunnelGoalMax).optional().describe('Optional goal for the funnel being diagnosed'),
+  "recentChanges": zod.string().max(retryAnalysisBodyRecentChangesMax).optional().describe('Optional recent product, campaign, or instrumentation changes'),
+  "additionalContext": zod.string().max(retryAnalysisBodyAdditionalContextMax).optional().describe('Optional business or instrumentation context for hypothesis generation')
+})
+
+
+
+
+export const retryAnalysisResponseInputStepsItemConvertedMin = 0;
+
+export const retryAnalysisResponseInputStepsMin = 3;
+export const retryAnalysisResponseInputStepsMax = 6;
+
+export const retryAnalysisResponseInputContextMax = 2000;
+
+export const retryAnalysisResponseInputFunnelGoalMax = 500;
+
+export const retryAnalysisResponseInputRecentChangesMax = 2000;
+
+export const retryAnalysisResponseInputAdditionalContextMax = 2000;
+
+
+
+
+export const retryAnalysisResponseStepsItemConvertedMin = 0;
+
+
+export const retryAnalysisResponseAiOneLikelyCausesMax = 3;
+
+
+export const retryAnalysisResponseAiOneHypothesesMin = 2;
+export const retryAnalysisResponseAiOneHypothesesMax = 3;
+
+
+export const retryAnalysisResponseAiOneMissingEvidenceMax = 3;
+
+
+
+
+
+
+
+export const RetryAnalysisResponse = zod.object({
+  "id": zod.int(),
+  "timestamp": zod.string(),
+  "input": zod.object({
+  "steps": zod.array(zod.object({
+  "name": zod.string().min(1),
+  "order": zod.int().min(1),
+  "entered": zod.int().min(1),
+  "converted": zod.int().min(retryAnalysisResponseInputStepsItemConvertedMin),
+  "description": zod.string()
+})).min(retryAnalysisResponseInputStepsMin).max(retryAnalysisResponseInputStepsMax),
+  "context": zod.string().max(retryAnalysisResponseInputContextMax).optional().describe('Deprecated alias for additionalContext'),
+  "funnelGoal": zod.string().max(retryAnalysisResponseInputFunnelGoalMax).optional().describe('Optional goal for the funnel being diagnosed'),
+  "recentChanges": zod.string().max(retryAnalysisResponseInputRecentChangesMax).optional().describe('Optional recent product, campaign, or instrumentation changes'),
+  "additionalContext": zod.string().max(retryAnalysisResponseInputAdditionalContextMax).optional().describe('Optional business or instrumentation context for hypothesis generation')
+}),
+  "steps": zod.array(zod.object({
+  "name": zod.string().min(1),
+  "order": zod.int().min(1),
+  "entered": zod.int().min(1),
+  "converted": zod.int().min(retryAnalysisResponseStepsItemConvertedMin),
+  "description": zod.string()
+})),
+  "logic": zod.object({
+  "thresholdPercent": zod.number(),
+  "steps": zod.array(zod.object({
+  "name": zod.string(),
+  "order": zod.int(),
+  "entered": zod.int(),
+  "converted": zod.int(),
+  "description": zod.string(),
+  "conversionRate": zod.number(),
+  "dropOffPercent": zod.number(),
+  "usersLost": zod.int(),
+  "isAbnormal": zod.boolean()
+})),
+  "flaggedSteps": zod.array(zod.string()),
+  "hasAbnormalDropOff": zod.boolean()
+}),
+  "ai": zod.union([zod.object({
+  "likelyCauses": zod.array(zod.string().min(1)).min(1).max(retryAnalysisResponseAiOneLikelyCausesMax),
+  "hypotheses": zod.array(zod.string().min(1)).min(retryAnalysisResponseAiOneHypothesesMin).max(retryAnalysisResponseAiOneHypothesesMax),
+  "missingEvidence": zod.array(zod.string().min(1)).min(1).max(retryAnalysisResponseAiOneMissingEvidenceMax),
+  "suggestedInvestigation": zod.string().min(1),
+  "recommendedInvestigation": zod.string().min(1),
+  "suggestedExperiment": zod.string().min(1),
+  "confidence": zod.enum(['high', 'medium', 'low']),
+  "reasoning": zod.string().min(1)
+}),zod.null()]),
+  "confidence": zod.enum(['high', 'medium', 'low']),
+  "status": zod.enum(['loading', 'ok', 'no-flag', 'api-error', 'ai-parse-error']),
   "errorMessage": zod.string().nullable()
 })
 
@@ -214,7 +385,7 @@ export const GetAdminSummaryResponse = zod.object({
   "timestamp": zod.string(),
   "flaggedSteps": zod.array(zod.string()),
   "confidence": zod.enum(['high', 'medium', 'low']),
-  "status": zod.enum(['ok', 'no-flag', 'api-error', 'ai-parse-error'])
+  "status": zod.enum(['loading', 'ok', 'no-flag', 'api-error', 'ai-parse-error'])
 }))
 })
 

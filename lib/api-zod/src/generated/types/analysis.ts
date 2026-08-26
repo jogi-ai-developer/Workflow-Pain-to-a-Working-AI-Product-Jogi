@@ -7,6 +7,7 @@
  */
 import type { AiResult } from './aiResult';
 import type { AnalysisConfidence } from './analysisConfidence';
+import type { AnalysisInput } from './analysisInput';
 import type { AnalysisStatus } from './analysisStatus';
 import type { FunnelStepInput } from './funnelStepInput';
 import type { LogicResult } from './logicResult';
@@ -14,6 +15,7 @@ import type { LogicResult } from './logicResult';
 export interface Analysis {
   id: number;
   timestamp: string;
+  input: AnalysisInput;
   steps: FunnelStepInput[];
   logic: LogicResult;
   ai: AiResult | null;

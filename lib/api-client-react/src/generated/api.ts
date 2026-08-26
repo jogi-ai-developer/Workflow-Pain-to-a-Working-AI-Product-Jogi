@@ -23,6 +23,7 @@ import type {
   AdminSummary,
   Analysis,
   AnalysisInput,
+  AnalysisRetryInput,
   AnalysisSummary,
   Error,
   HealthStatus,
@@ -359,6 +360,78 @@ export function useGetAnalysis<TData = Awaited<ReturnType<typeof getAnalysis>>, 
 
 
 
+
+export const getRetryAnalysisUrl = (id: number,) => {
+
+
+
+
+  return `/api/analyses/${id}/retry`
+}
+
+/**
+ * @summary Retry AI hypotheses for a failed funnel analysis
+ */
+export const retryAnalysis = async (id: number,
+    analysisRetryInput: AnalysisRetryInput, options?: Parameters<typeof customFetch>[1]): Promise<Analysis> => {
+
+  return customFetch<Analysis>(getRetryAnalysisUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(analysisRetryInput)
+  }
+);}
+
+
+
+
+
+export const getRetryAnalysisMutationOptions = <TError = ErrorType<Error | Analysis>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof retryAnalysis>>, TError,{id: number;data: BodyType<AnalysisRetryInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof retryAnalysis>>, TError,{id: number;data: BodyType<AnalysisRetryInput>}, TContext> => {
+
+const mutationKey = ['retryAnalysis'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof retryAnalysis>>, {id: number;data: BodyType<AnalysisRetryInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  retryAnalysis(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RetryAnalysisMutationResult = NonNullable<Awaited<ReturnType<typeof retryAnalysis>>>
+    export type RetryAnalysisMutationBody = BodyType<AnalysisRetryInput>
+    export type RetryAnalysisMutationError = ErrorType<Error | Analysis>
+
+    /**
+ * @summary Retry AI hypotheses for a failed funnel analysis
+ */
+export const useRetryAnalysis = <TError = ErrorType<Error | Analysis>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof retryAnalysis>>, TError,{id: number;data: BodyType<AnalysisRetryInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof retryAnalysis>>,
+        TError,
+        {id: number;data: BodyType<AnalysisRetryInput>},
+        TContext
+      > => {
+      return useMutation(getRetryAnalysisMutationOptions(options));
+    }
 
 export const getGetAdminSummaryUrl = () => {
 

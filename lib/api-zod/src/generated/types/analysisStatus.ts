@@ -10,6 +10,7 @@ export type AnalysisStatus = typeof AnalysisStatus[keyof typeof AnalysisStatus];
 
 
 export const AnalysisStatus = {
+  loading: 'loading',
   ok: 'ok',
   'no-flag': 'no-flag',
   'api-error': 'api-error',

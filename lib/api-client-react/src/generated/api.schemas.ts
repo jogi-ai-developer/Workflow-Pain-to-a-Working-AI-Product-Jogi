@@ -168,6 +168,7 @@ export type AnalysisStatus = typeof AnalysisStatus[keyof typeof AnalysisStatus];
 
 
 export const AnalysisStatus = {
+  loading: 'loading',
   ok: 'ok',
   'no-flag': 'no-flag',
   'api-error': 'api-error',
@@ -177,6 +178,7 @@ export const AnalysisStatus = {
 export interface Analysis {
   id: number;
   timestamp: string;
+  input: AnalysisInput;
   steps: FunnelStepInput[];
   logic: LogicResult;
   ai: AiResult | null;
@@ -184,6 +186,24 @@ export interface Analysis {
   status: AnalysisStatus;
   /** @nullable */
   errorMessage: string | null;
+}
+
+export interface AnalysisRetryInput {
+  /**
+     * Optional goal for the funnel being diagnosed
+     * @maxLength 500
+     */
+  funnelGoal?: string;
+  /**
+     * Optional recent product, campaign, or instrumentation changes
+     * @maxLength 2000
+     */
+  recentChanges?: string;
+  /**
+     * Optional business or instrumentation context for hypothesis generation
+     * @maxLength 2000
+     */
+  additionalContext?: string;
 }
 
 export type AnalysisSummaryConfidence = typeof AnalysisSummaryConfidence[keyof typeof AnalysisSummaryConfidence];
@@ -199,6 +219,7 @@ export type AnalysisSummaryStatus = typeof AnalysisSummaryStatus[keyof typeof An
 
 
 export const AnalysisSummaryStatus = {
+  loading: 'loading',
   ok: 'ok',
   'no-flag': 'no-flag',
   'api-error': 'api-error',
