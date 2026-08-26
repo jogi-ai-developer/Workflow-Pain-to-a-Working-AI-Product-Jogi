@@ -1,0 +1,1 @@
+- [GitHub connector Git-data uploads](github-connector-html-uploads.md) — use base64 blobs; throttle Git data writes to avoid proxy rate limits.
