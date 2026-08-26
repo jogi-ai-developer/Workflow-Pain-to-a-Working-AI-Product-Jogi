@@ -5,12 +5,12 @@ import {
   type AnalysisInput,
   type FunnelStepInput,
 } from "@workspace/api-zod";
+import { analysesTable, db } from "@workspace/db";
+import { desc, eq } from "drizzle-orm";
 import { z } from "zod";
 
 const router: IRouter = Router();
 const thresholdPercent = 40;
-let nextId = 1;
-const analyses = new Map<number, Analysis>();
 
 const aiResponseSchema = z.object({
   likely_causes: z.array(z.string().min(1)).min(1).max(3),
@@ -175,31 +175,60 @@ async function generateHypotheses(
   }
 }
 
-function makeAnalysis(steps: FunnelStepInput[], logic: ReturnType<typeof calculateLogic>, ai: Analysis["ai"], status: Analysis["status"], errorMessage: string | null): Analysis {
-  const analysis: Analysis = {
-    id: nextId++,
-    timestamp: new Date().toISOString(),
-    steps,
-    logic,
-    ai,
-    confidence: ai?.confidence ?? "low",
-    status,
-    errorMessage,
+type StoredAnalysis = typeof analysesTable.$inferSelect;
+
+function deserializeAnalysis(row: StoredAnalysis): Analysis {
+  return {
+    id: row.id,
+    timestamp: row.timestamp,
+    steps: row.steps as Analysis["steps"],
+    logic: row.logic as Analysis["logic"],
+    ai: row.ai as Analysis["ai"],
+    confidence: row.confidence as Analysis["confidence"],
+    status: row.status as Analysis["status"],
+    errorMessage: row.errorMessage,
   };
-  analyses.set(analysis.id, analysis);
-  return analysis;
 }
 
-router.get("/analyses", (_req, res) => {
-  const summaries = [...analyses.values()]
-    .sort((a, b) => b.id - a.id)
-    .map((analysis) => ({
-      id: analysis.id,
-      timestamp: analysis.timestamp,
-      flaggedSteps: analysis.logic.flaggedSteps,
-      confidence: analysis.confidence,
-      status: analysis.status,
-    }));
+async function saveAnalysis(
+  steps: FunnelStepInput[],
+  logic: ReturnType<typeof calculateLogic>,
+  ai: Analysis["ai"],
+  status: Analysis["status"],
+  errorMessage: string | null,
+): Promise<Analysis> {
+  const [row] = await db
+    .insert(analysesTable)
+    .values({
+      timestamp: new Date().toISOString(),
+      steps,
+      logic,
+      ai,
+      confidence: ai?.confidence ?? "low",
+      status,
+      errorMessage,
+    })
+    .returning();
+
+  if (!row) {
+    throw new Error("Failed to save analysis");
+  }
+  return deserializeAnalysis(row);
+}
+
+function toSummary(analysis: Analysis) {
+  return {
+    id: analysis.id,
+    timestamp: analysis.timestamp,
+    flaggedSteps: analysis.logic.flaggedSteps,
+    confidence: analysis.confidence,
+    status: analysis.status,
+  };
+}
+
+router.get("/analyses", async (_req, res) => {
+  const rows = await db.select().from(analysesTable).orderBy(desc(analysesTable.id));
+  const summaries = rows.map((row) => toSummary(deserializeAnalysis(row)));
   res.json(summaries);
 });
 
@@ -217,35 +246,48 @@ router.post("/analyses", async (req, res): Promise<void> => {
 
   const logic = calculateLogic(parsed.data.steps);
   if (!logic.hasAbnormalDropOff) {
-    res.status(201).json(makeAnalysis(parsed.data.steps, logic, null, "no-flag", null));
+    res
+      .status(201)
+      .json(await saveAnalysis(parsed.data.steps, logic, null, "no-flag", null));
     return;
   }
 
   try {
     const ai = await generateHypotheses(logic, parsed.data);
-    res.status(201).json(makeAnalysis(parsed.data.steps, logic, ai, "ok", null));
+    res
+      .status(201)
+      .json(await saveAnalysis(parsed.data.steps, logic, ai, "ok", null));
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown AI service failure";
     const status = message.includes("malformed JSON") || message.includes("invalid hypothesis shape") || message.includes("no JSON message")
       ? "ai-parse-error"
       : "api-error";
-    const analysis = makeAnalysis(parsed.data.steps, logic, null, status, message);
+    const analysis = await saveAnalysis(parsed.data.steps, logic, null, status, message);
     res.status(502).json(analysis);
   }
 });
 
-router.get("/analyses/:id", (req, res) => {
+router.get("/analyses/:id", async (req, res) => {
   const id = Number(req.params.id);
-  const analysis = analyses.get(id);
-  if (!Number.isInteger(id) || !analysis) {
+  if (!Number.isInteger(id)) {
     res.status(404).json({ error: "Analysis not found" });
     return;
   }
-  res.json(analysis);
+  const [row] = await db
+    .select()
+    .from(analysesTable)
+    .where(eq(analysesTable.id, id))
+    .limit(1);
+  if (!row) {
+    res.status(404).json({ error: "Analysis not found" });
+    return;
+  }
+  res.json(deserializeAnalysis(row));
 });
 
-router.get("/admin/summary", (_req, res) => {
-  const all = [...analyses.values()];
+router.get("/admin/summary", async (_req, res) => {
+  const rows = await db.select().from(analysesTable);
+  const all = rows.map(deserializeAnalysis);
   res.json({
     totalAnalyses: all.length,
     confidenceCounts: {
@@ -254,16 +296,7 @@ router.get("/admin/summary", (_req, res) => {
       low: all.filter((analysis) => analysis.confidence === "low").length,
     },
     aiErrorCount: all.filter((analysis) => analysis.status === "api-error" || analysis.status === "ai-parse-error").length,
-    recentAnalyses: all
-      .sort((a, b) => b.id - a.id)
-      .slice(0, 10)
-      .map((analysis) => ({
-        id: analysis.id,
-        timestamp: analysis.timestamp,
-        flaggedSteps: analysis.logic.flaggedSteps,
-        confidence: analysis.confidence,
-        status: analysis.status,
-      })),
+    recentAnalyses: all.sort((a, b) => b.id - a.id).slice(0, 10).map(toSummary),
   });
 });
 
