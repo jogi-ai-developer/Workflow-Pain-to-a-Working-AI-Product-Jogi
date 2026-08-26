@@ -1,0 +1,274 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: analyses
+    description: Funnel analysis operations
+  - name: admin
+    description: Aggregate analysis metrics
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /analyses:
+    get:
+      operationId: listAnalyses
+      tags: [analyses]
+      summary: List recent funnel analyses
+      responses:
+        "200":
+          description: Recent analyses
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AnalysisSummary"
+    post:
+      operationId: createAnalysis
+      tags: [analyses]
+      summary: Analyze a funnel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnalysisInput"
+      responses:
+        "201":
+          description: Completed analysis
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Analysis"
+        "400":
+          description: Invalid funnel input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "502":
+          description: Analysis service unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Analysis"
+  /analyses/{id}:
+    get:
+      operationId: getAnalysis
+      tags: [analyses]
+      summary: Get one saved funnel analysis
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Saved analysis
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Analysis"
+        "404":
+          description: Analysis not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /admin/summary:
+    get:
+      operationId: getAdminSummary
+      tags: [admin]
+      summary: Get aggregate analysis metrics
+      responses:
+        "200":
+          description: Aggregate metrics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSummary"
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+    FunnelStepInput:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+        order:
+          type: integer
+          minimum: 1
+        entered:
+          type: integer
+          minimum: 1
+        converted:
+          type: integer
+          minimum: 0
+        description:
+          type: string
+      required: [name, order, entered, converted, description]
+    AnalysisInput:
+      type: object
+      properties:
+        steps:
+          type: array
+          minItems: 3
+          maxItems: 6
+          items:
+            $ref: "#/components/schemas/FunnelStepInput"
+      required: [steps]
+    StepResult:
+      type: object
+      properties:
+        name:
+          type: string
+        order:
+          type: integer
+        entered:
+          type: integer
+        converted:
+          type: integer
+        description:
+          type: string
+        conversionRate:
+          type: number
+        dropOffPercent:
+          type: number
+        isAbnormal:
+          type: boolean
+      required: [name, order, entered, converted, description, conversionRate, dropOffPercent, isAbnormal]
+    LogicResult:
+      type: object
+      properties:
+        thresholdPercent:
+          type: number
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/StepResult"
+        flaggedSteps:
+          type: array
+          items:
+            type: string
+        hasAbnormalDropOff:
+          type: boolean
+      required: [thresholdPercent, steps, flaggedSteps, hasAbnormalDropOff]
+    AiResult:
+      type: object
+      properties:
+        likelyCauses:
+          type: array
+          items:
+            type: string
+        hypotheses:
+          type: array
+          items:
+            type: string
+        suggestedExperiment:
+          type: string
+        confidence:
+          type: string
+          enum: [high, medium, low]
+        reasoning:
+          type: string
+      required: [likelyCauses, hypotheses, suggestedExperiment, confidence, reasoning]
+    Analysis:
+      type: object
+      properties:
+        id:
+          type: integer
+        timestamp:
+          type: string
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/FunnelStepInput"
+        logic:
+          $ref: "#/components/schemas/LogicResult"
+        ai:
+          oneOf:
+            - $ref: "#/components/schemas/AiResult"
+            - type: "null"
+        confidence:
+          type: string
+          enum: [high, medium, low]
+        status:
+          type: string
+          enum: [ok, no-flag, api-error, ai-parse-error]
+        errorMessage:
+          type: ["string", "null"]
+      required: [id, timestamp, steps, logic, ai, confidence, status, errorMessage]
+    AnalysisSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+        timestamp:
+          type: string
+        flaggedSteps:
+          type: array
+          items:
+            type: string
+        confidence:
+          type: string
+          enum: [high, medium, low]
+        status:
+          type: string
+          enum: [ok, no-flag, api-error, ai-parse-error]
+      required: [id, timestamp, flaggedSteps, confidence, status]
+    AdminSummary:
+      type: object
+      properties:
+        totalAnalyses:
+          type: integer
+        confidenceCounts:
+          type: object
+          properties:
+            high:
+              type: integer
+            medium:
+              type: integer
+            low:
+              type: integer
+          required: [high, medium, low]
+        aiErrorCount:
+          type: integer
+        recentAnalyses:
+          type: array
+          items:
+            $ref: "#/components/schemas/AnalysisSummary"
+      required: [totalAnalyses, confidenceCounts, aiErrorCount, recentAnalyses]
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
+

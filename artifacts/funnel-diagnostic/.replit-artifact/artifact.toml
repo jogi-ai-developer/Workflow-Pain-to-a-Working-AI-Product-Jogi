@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Funnel Drop-off Diagnostic Tool"
+description = "A focused diagnostic workspace for product and growth teams to enter funnel steps, identify meaningful drop-off, and generate evidence-based experiments."
+version = "1.0.0"
+id = "artifacts/funnel-diagnostic"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 22232
+
+[services.development]
+run = "pnpm --filter @workspace/funnel-diagnostic run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/funnel-diagnostic", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/funnel-diagnostic/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "22232"
+BASE_PATH = "/"
