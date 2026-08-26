@@ -14,6 +14,8 @@ tags:
     description: Funnel analysis operations
   - name: admin
     description: Aggregate analysis metrics
+  - name: hypotheses
+    description: Evidence-aware funnel hypothesis generation
 paths:
   /healthz:
     get:
@@ -107,6 +109,42 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AdminSummary"
+  /hypotheses:
+    post:
+      operationId: generateHypotheses
+      tags: [hypotheses]
+      summary: Generate evidence-aware hypotheses for flagged funnel steps
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HypothesisRequest"
+      responses:
+        "200":
+          description: Validated evidence-aware hypotheses
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiResult"
+        "400":
+          description: Invalid or unflagged evidence
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: AI output did not match the required evidence-aware format
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "502":
+          description: AI service unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 components:
   schemas:
     HealthStatus:
@@ -161,9 +199,11 @@ components:
           type: number
         dropOffPercent:
           type: number
+        usersLost:
+          type: integer
         isAbnormal:
           type: boolean
-      required: [name, order, entered, converted, description, conversionRate, dropOffPercent, isAbnormal]
+      required: [name, order, entered, converted, description, conversionRate, dropOffPercent, usersLost, isAbnormal]
     LogicResult:
       type: object
       properties:
@@ -185,20 +225,51 @@ components:
       properties:
         likelyCauses:
           type: array
+          minItems: 1
+          maxItems: 3
           items:
             type: string
+            minLength: 1
         hypotheses:
           type: array
+          minItems: 2
+          maxItems: 3
           items:
             type: string
+            minLength: 1
+        missingEvidence:
+          type: array
+          minItems: 1
+          maxItems: 3
+          items:
+            type: string
+            minLength: 1
+        suggestedInvestigation:
+          type: string
+          minLength: 1
         suggestedExperiment:
           type: string
+          minLength: 1
         confidence:
           type: string
           enum: [high, medium, low]
         reasoning:
           type: string
-      required: [likelyCauses, hypotheses, suggestedExperiment, confidence, reasoning]
+          minLength: 1
+      required: [likelyCauses, hypotheses, missingEvidence, suggestedInvestigation, suggestedExperiment, confidence, reasoning]
+    HypothesisRequest:
+      type: object
+      properties:
+        thresholdPercent:
+          type: number
+          minimum: 0
+          maximum: 100
+        flaggedSteps:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/StepResult"
+      required: [thresholdPercent, flaggedSteps]
     Analysis:
       type: object
       properties:

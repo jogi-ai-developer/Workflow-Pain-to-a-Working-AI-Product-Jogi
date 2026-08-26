@@ -8,9 +8,29 @@
 import type { AiResultConfidence } from './aiResultConfidence';
 
 export interface AiResult {
+  /**
+     * @minItems 1
+     * @maxItems 3
+     * @items.minLength 1
+     */
   likelyCauses: string[];
+  /**
+     * @minItems 2
+     * @maxItems 3
+     * @items.minLength 1
+     */
   hypotheses: string[];
+  /**
+     * @minItems 1
+     * @maxItems 3
+     * @items.minLength 1
+     */
+  missingEvidence: string[];
+  /** @minLength 1 */
+  suggestedInvestigation: string;
+  /** @minLength 1 */
   suggestedExperiment: string;
   confidence: AiResultConfidence;
+  /** @minLength 1 */
   reasoning: string;
 }

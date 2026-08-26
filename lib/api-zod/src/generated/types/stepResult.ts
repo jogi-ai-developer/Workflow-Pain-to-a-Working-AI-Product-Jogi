@@ -14,5 +14,6 @@ export interface StepResult {
   description: string;
   conversionRate: number;
   dropOffPercent: number;
+  usersLost: number;
   isAbnormal: boolean;
 }

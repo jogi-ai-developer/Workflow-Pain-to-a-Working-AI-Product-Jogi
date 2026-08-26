@@ -59,6 +59,19 @@ export const CreateAnalysisBody = zod.object({
 export const createAnalysisResponseStepsItemConvertedMin = 0;
 
 
+export const createAnalysisResponseAiOneLikelyCausesMax = 3;
+
+
+export const createAnalysisResponseAiOneHypothesesMin = 2;
+export const createAnalysisResponseAiOneHypothesesMax = 3;
+
+
+export const createAnalysisResponseAiOneMissingEvidenceMax = 3;
+
+
+
+
+
 
 export const CreateAnalysisResponse = zod.object({
   "id": zod.int(),
@@ -80,17 +93,20 @@ export const CreateAnalysisResponse = zod.object({
   "description": zod.string(),
   "conversionRate": zod.number(),
   "dropOffPercent": zod.number(),
+  "usersLost": zod.int(),
   "isAbnormal": zod.boolean()
 })),
   "flaggedSteps": zod.array(zod.string()),
   "hasAbnormalDropOff": zod.boolean()
 }),
   "ai": zod.union([zod.object({
-  "likelyCauses": zod.array(zod.string()),
-  "hypotheses": zod.array(zod.string()),
-  "suggestedExperiment": zod.string(),
+  "likelyCauses": zod.array(zod.string().min(1)).min(1).max(createAnalysisResponseAiOneLikelyCausesMax),
+  "hypotheses": zod.array(zod.string().min(1)).min(createAnalysisResponseAiOneHypothesesMin).max(createAnalysisResponseAiOneHypothesesMax),
+  "missingEvidence": zod.array(zod.string().min(1)).min(1).max(createAnalysisResponseAiOneMissingEvidenceMax),
+  "suggestedInvestigation": zod.string().min(1),
+  "suggestedExperiment": zod.string().min(1),
   "confidence": zod.enum(['high', 'medium', 'low']),
-  "reasoning": zod.string()
+  "reasoning": zod.string().min(1)
 }),zod.null()]),
   "confidence": zod.enum(['high', 'medium', 'low']),
   "status": zod.enum(['ok', 'no-flag', 'api-error', 'ai-parse-error']),
@@ -109,6 +125,19 @@ export const GetAnalysisParams = zod.object({
 
 
 export const getAnalysisResponseStepsItemConvertedMin = 0;
+
+
+export const getAnalysisResponseAiOneLikelyCausesMax = 3;
+
+
+export const getAnalysisResponseAiOneHypothesesMin = 2;
+export const getAnalysisResponseAiOneHypothesesMax = 3;
+
+
+export const getAnalysisResponseAiOneMissingEvidenceMax = 3;
+
+
+
 
 
 
@@ -132,17 +161,20 @@ export const GetAnalysisResponse = zod.object({
   "description": zod.string(),
   "conversionRate": zod.number(),
   "dropOffPercent": zod.number(),
+  "usersLost": zod.int(),
   "isAbnormal": zod.boolean()
 })),
   "flaggedSteps": zod.array(zod.string()),
   "hasAbnormalDropOff": zod.boolean()
 }),
   "ai": zod.union([zod.object({
-  "likelyCauses": zod.array(zod.string()),
-  "hypotheses": zod.array(zod.string()),
-  "suggestedExperiment": zod.string(),
+  "likelyCauses": zod.array(zod.string().min(1)).min(1).max(getAnalysisResponseAiOneLikelyCausesMax),
+  "hypotheses": zod.array(zod.string().min(1)).min(getAnalysisResponseAiOneHypothesesMin).max(getAnalysisResponseAiOneHypothesesMax),
+  "missingEvidence": zod.array(zod.string().min(1)).min(1).max(getAnalysisResponseAiOneMissingEvidenceMax),
+  "suggestedInvestigation": zod.string().min(1),
+  "suggestedExperiment": zod.string().min(1),
   "confidence": zod.enum(['high', 'medium', 'low']),
-  "reasoning": zod.string()
+  "reasoning": zod.string().min(1)
 }),zod.null()]),
   "confidence": zod.enum(['high', 'medium', 'low']),
   "status": zod.enum(['ok', 'no-flag', 'api-error', 'ai-parse-error']),
@@ -168,6 +200,56 @@ export const GetAdminSummaryResponse = zod.object({
   "confidence": zod.enum(['high', 'medium', 'low']),
   "status": zod.enum(['ok', 'no-flag', 'api-error', 'ai-parse-error'])
 }))
+})
+
+
+/**
+ * @summary Generate evidence-aware hypotheses for flagged funnel steps
+ */
+export const generateHypothesesBodyThresholdPercentMin = 0;
+export const generateHypothesesBodyThresholdPercentMax = 100;
+
+
+
+
+export const GenerateHypothesesBody = zod.object({
+  "thresholdPercent": zod.number().min(generateHypothesesBodyThresholdPercentMin).max(generateHypothesesBodyThresholdPercentMax),
+  "flaggedSteps": zod.array(zod.object({
+  "name": zod.string(),
+  "order": zod.int(),
+  "entered": zod.int(),
+  "converted": zod.int(),
+  "description": zod.string(),
+  "conversionRate": zod.number(),
+  "dropOffPercent": zod.number(),
+  "usersLost": zod.int(),
+  "isAbnormal": zod.boolean()
+})).min(1)
+})
+
+
+export const generateHypothesesResponseLikelyCausesMax = 3;
+
+
+export const generateHypothesesResponseHypothesesMin = 2;
+export const generateHypothesesResponseHypothesesMax = 3;
+
+
+export const generateHypothesesResponseMissingEvidenceMax = 3;
+
+
+
+
+
+
+export const GenerateHypothesesResponse = zod.object({
+  "likelyCauses": zod.array(zod.string().min(1)).min(1).max(generateHypothesesResponseLikelyCausesMax),
+  "hypotheses": zod.array(zod.string().min(1)).min(generateHypothesesResponseHypothesesMin).max(generateHypothesesResponseHypothesesMax),
+  "missingEvidence": zod.array(zod.string().min(1)).min(1).max(generateHypothesesResponseMissingEvidenceMax),
+  "suggestedInvestigation": zod.string().min(1),
+  "suggestedExperiment": zod.string().min(1),
+  "confidence": zod.enum(['high', 'medium', 'low']),
+  "reasoning": zod.string().min(1)
 })
 
 

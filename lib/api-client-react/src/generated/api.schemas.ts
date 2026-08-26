@@ -37,6 +37,7 @@ export interface StepResult {
   description: string;
   conversionRate: number;
   dropOffPercent: number;
+  usersLost: number;
   isAbnormal: boolean;
 }
 
@@ -57,11 +58,41 @@ export const AiResultConfidence = {
 } as const;
 
 export interface AiResult {
+  /**
+     * @minItems 1
+     * @maxItems 3
+     * @items.minLength 1
+     */
   likelyCauses: string[];
+  /**
+     * @minItems 2
+     * @maxItems 3
+     * @items.minLength 1
+     */
   hypotheses: string[];
+  /**
+     * @minItems 1
+     * @maxItems 3
+     * @items.minLength 1
+     */
+  missingEvidence: string[];
+  /** @minLength 1 */
+  suggestedInvestigation: string;
+  /** @minLength 1 */
   suggestedExperiment: string;
   confidence: AiResultConfidence;
+  /** @minLength 1 */
   reasoning: string;
+}
+
+export interface HypothesisRequest {
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  thresholdPercent: number;
+  /** @minItems 1 */
+  flaggedSteps: StepResult[];
 }
 
 export type AnalysisConfidence = typeof AnalysisConfidence[keyof typeof AnalysisConfidence];

@@ -20,5 +20,6 @@ export * from './analysisSummaryStatus';
 export * from './error';
 export * from './funnelStepInput';
 export * from './healthStatus';
+export * from './hypothesisRequest';
 export * from './logicResult';
 export * from './stepResult';

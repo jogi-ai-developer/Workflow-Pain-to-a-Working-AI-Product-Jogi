@@ -21,11 +21,13 @@ import type {
 
 import type {
   AdminSummary,
+  AiResult,
   Analysis,
   AnalysisInput,
   AnalysisSummary,
   Error,
-  HealthStatus
+  HealthStatus,
+  HypothesisRequest
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -434,4 +436,75 @@ export function useGetAdminSummary<TData = Awaited<ReturnType<typeof getAdminSum
 
 
 
+
+export const getGenerateHypothesesUrl = () => {
+
+
+
+
+  return `/api/hypotheses`
+}
+
+/**
+ * @summary Generate evidence-aware hypotheses for flagged funnel steps
+ */
+export const generateHypotheses = async (hypothesisRequest: HypothesisRequest, options?: Parameters<typeof customFetch>[1]): Promise<AiResult> => {
+
+  return customFetch<AiResult>(getGenerateHypothesesUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(hypothesisRequest)
+  }
+);}
+
+
+
+
+
+export const getGenerateHypothesesMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateHypotheses>>, TError,{data: BodyType<HypothesisRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof generateHypotheses>>, TError,{data: BodyType<HypothesisRequest>}, TContext> => {
+
+const mutationKey = ['generateHypotheses'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof generateHypotheses>>, {data: BodyType<HypothesisRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  generateHypotheses(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type GenerateHypothesesMutationResult = NonNullable<Awaited<ReturnType<typeof generateHypotheses>>>
+    export type GenerateHypothesesMutationBody = BodyType<HypothesisRequest>
+    export type GenerateHypothesesMutationError = ErrorType<Error>
+
+    /**
+ * @summary Generate evidence-aware hypotheses for flagged funnel steps
+ */
+export const useGenerateHypotheses = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateHypotheses>>, TError,{data: BodyType<HypothesisRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof generateHypotheses>>,
+        TError,
+        {data: BodyType<HypothesisRequest>},
+        TContext
+      > => {
+      return useMutation(getGenerateHypothesesMutationOptions(options));
+    }
 

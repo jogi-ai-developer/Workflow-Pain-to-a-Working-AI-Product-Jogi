@@ -10,7 +10,7 @@ export default function Home() {
           </div>
           <div className="font-semibold text-lg tracking-tight">Drop-off Diagnostic</div>
           <div className="ml-auto flex items-center gap-4 text-sm font-medium text-muted-foreground">
-            <span className="hidden sm:inline-block">Phase 2: Deterministic Analysis</span>
+            <span className="hidden sm:inline-block">Phase 3: Evidence-aware hypotheses</span>
             <div className="h-2 w-2 rounded-full bg-success"></div>
           </div>
         </div>
