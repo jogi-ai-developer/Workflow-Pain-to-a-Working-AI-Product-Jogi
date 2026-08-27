@@ -7,11 +7,12 @@ import {
   type FunnelStepInput,
 } from "@workspace/api-zod";
 import { analysesTable, db } from "@workspace/db";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 
 const router: IRouter = Router();
 const thresholdPercent = 40;
+const staleLoadingThresholdMs = 60_000;
 
 const aiResponseSchema = z.object({
   likely_causes: z.array(z.string().min(1)).min(1).max(3),
@@ -28,30 +29,76 @@ type StepResult = FunnelStepInput & {
   dropOffPercent: number;
   usersLost: number;
   isAbnormal: boolean;
+  evidenceStrength: EvidenceStrength;
 };
+
+type EvidenceStrength = "high" | "medium" | "low" | "insufficient";
+
+const minimumEvidenceSampleSize = 30;
+const minimumEvidenceUsersLost = 10;
+const strongEvidenceSampleSize = 1_000;
+const strongEvidenceUsersLost = 500;
 
 function roundToTwoDecimals(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+function classifyEvidenceStrength(
+  entered: number,
+  usersLost: number,
+  dropOffPercent: number,
+): EvidenceStrength {
+  if (entered < minimumEvidenceSampleSize || usersLost < minimumEvidenceUsersLost) {
+    return "insufficient";
+  }
+  if (dropOffPercent >= thresholdPercent) {
+    return entered >= strongEvidenceSampleSize || usersLost >= strongEvidenceUsersLost
+      ? "high"
+      : "medium";
+  }
+  return "low";
+}
+
 function calculateLogic(steps: FunnelStepInput[]) {
   const analyzedSteps: StepResult[] = steps.map((step) => {
-    const conversionRate = (step.converted / step.entered) * 100;
-    const dropOffPercent = ((step.entered - step.converted) / step.entered) * 100;
+    const conversionRate = step.entered === 0 ? 0 : (step.converted / step.entered) * 100;
+    const dropOffPercent = step.entered === 0
+      ? 0
+      : ((step.entered - step.converted) / step.entered) * 100;
+    const usersLost = step.entered - step.converted;
+    const isAbnormal = dropOffPercent >= thresholdPercent;
     return {
       ...step,
       conversionRate: roundToTwoDecimals(conversionRate),
       dropOffPercent: roundToTwoDecimals(dropOffPercent),
-      usersLost: step.entered - step.converted,
-      isAbnormal: dropOffPercent >= thresholdPercent,
+      usersLost,
+      isAbnormal,
+      evidenceStrength: classifyEvidenceStrength(step.entered, usersLost, dropOffPercent),
     };
   });
   const flaggedSteps = analyzedSteps.filter((step) => step.isAbnormal).map((step) => step.name);
+  const actionableSteps = analyzedSteps.filter(
+    (step) => step.isAbnormal && step.evidenceStrength !== "insufficient",
+  );
+  const evidenceStrength: EvidenceStrength = flaggedSteps.length === 0
+    ? analyzedSteps.every((step) => step.evidenceStrength === "insufficient") ? "insufficient" : "low"
+    : analyzedSteps.some((step) => step.isAbnormal && step.evidenceStrength === "high")
+      ? "high"
+      : analyzedSteps.some((step) => step.isAbnormal && step.evidenceStrength === "medium")
+        ? "medium"
+        : actionableSteps.length > 0
+          ? "low"
+          : "insufficient";
   return {
     thresholdPercent,
     steps: analyzedSteps,
     flaggedSteps,
     hasAbnormalDropOff: flaggedSteps.length > 0,
+    hasActionableDropOff: actionableSteps.length > 0,
+    hasInsufficientEvidence: analyzedSteps.some(
+      (step) => step.isAbnormal && step.evidenceStrength === "insufficient",
+    ),
+    evidenceStrength,
   };
 }
 
@@ -59,8 +106,19 @@ function validateBusinessRules(steps: FunnelStepInput[]): string | null {
   if (new Set(steps.map((step) => step.order)).size !== steps.length) {
     return "Step orders must be unique";
   }
+  const normalizedNames = steps.map((step) => step.name.trim().toLowerCase());
+  if (new Set(normalizedNames).size !== normalizedNames.length) {
+    return "Step names must be unique";
+  }
   const invalidStep = steps.find((step) => step.converted > step.entered);
-  return invalidStep ? `Converted cannot exceed entered for "${invalidStep.name}"` : null;
+  if (invalidStep) return `Converted cannot exceed entered for "${invalidStep.name}"`;
+  const orderedSteps = [...steps].sort((a, b) => a.order - b.order);
+  for (let index = 1; index < orderedSteps.length; index += 1) {
+    if (orderedSteps[index].entered > orderedSteps[index - 1].converted) {
+      return `Users cannot increase between "${orderedSteps[index - 1].name}" and "${orderedSteps[index].name}"`;
+    }
+  }
+  return null;
 }
 
 function toAiResult(result: z.infer<typeof aiResponseSchema>) {
@@ -86,6 +144,19 @@ function normalizeInput(input: AnalysisInput): AnalysisInput {
   };
 }
 
+function addMissingDescriptions(body: unknown): unknown {
+  if (!body || typeof body !== "object" || !Array.isArray((body as { steps?: unknown }).steps)) {
+    return body;
+  }
+  return {
+    ...(body as Record<string, unknown>),
+    steps: (body as { steps: unknown[] }).steps.map((step) => {
+      if (!step || typeof step !== "object" || "description" in step) return step;
+      return { ...(step as Record<string, unknown>), description: "" };
+    }),
+  };
+}
+
 async function generateHypotheses(
   logic: ReturnType<typeof calculateLogic>,
   input: AnalysisInput,
@@ -99,6 +170,7 @@ async function generateHypotheses(
     dropOffPercent: step.dropOffPercent,
     usersLost: step.usersLost,
     isAbnormal: step.isAbnormal,
+    evidenceStrength: step.evidenceStrength,
     stepDescription: step.description,
     sampleSize: step.entered,
   }));
@@ -131,6 +203,8 @@ async function generateHypotheses(
     stepDescription: primaryStep?.stepDescription ?? null,
     recentChanges: input.recentChanges?.trim() || null,
     additionalContext: input.additionalContext?.trim() || input.context?.trim() || null,
+    evidenceStrength: logic.evidenceStrength,
+    hasInsufficientEvidence: logic.hasInsufficientEvidence,
   };
   const baseUrl = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL;
   const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
@@ -188,6 +262,12 @@ async function generateHypotheses(
 
 type StoredAnalysis = typeof analysesTable.$inferSelect;
 
+function isStaleLoadingAnalysis(status: string, timestamp: string, now = Date.now()): boolean {
+  if (status !== "loading") return false;
+  const startedAt = Date.parse(timestamp);
+  return Number.isFinite(startedAt) && now - startedAt >= staleLoadingThresholdMs;
+}
+
 function deserializeAnalysis(row: StoredAnalysis): Analysis {
   const steps = row.steps as Analysis["steps"];
   return {
@@ -200,6 +280,7 @@ function deserializeAnalysis(row: StoredAnalysis): Analysis {
     confidence: row.confidence as Analysis["confidence"],
     status: row.status as Analysis["status"],
     errorMessage: row.errorMessage,
+    isStale: isStaleLoadingAnalysis(row.status, row.timestamp),
   };
 }
 
@@ -239,6 +320,10 @@ async function updateAnalysis(
     status: Analysis["status"];
     errorMessage: string | null;
   },
+  expected?: {
+    status: string;
+    timestamp: string;
+  },
 ): Promise<Analysis | null> {
   const [row] = await db
     .update(analysesTable)
@@ -250,7 +335,14 @@ async function updateAnalysis(
       status: values.status,
       errorMessage: values.errorMessage,
     })
-    .where(eq(analysesTable.id, id))
+    .where(
+      and(
+        eq(analysesTable.id, id),
+        ...(expected
+          ? [eq(analysesTable.status, expected.status), eq(analysesTable.timestamp, expected.timestamp)]
+          : []),
+      ),
+    )
     .returning();
   return row ? deserializeAnalysis(row) : null;
 }
@@ -262,6 +354,7 @@ function toSummary(analysis: Analysis) {
     flaggedSteps: analysis.logic.flaggedSteps,
     confidence: analysis.confidence,
     status: analysis.status,
+    isStale: analysis.isStale,
   };
 }
 
@@ -272,7 +365,7 @@ router.get("/analyses", async (_req, res) => {
 });
 
 router.post("/analyses", async (req, res): Promise<void> => {
-  const parsed = CreateAnalysisBody.safeParse(req.body);
+  const parsed = CreateAnalysisBody.safeParse(addMissingDescriptions(req.body));
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
@@ -291,6 +384,12 @@ router.post("/analyses", async (req, res): Promise<void> => {
       .json(await saveAnalysis(input, logic, null, "no-flag", null));
     return;
   }
+  if (!logic.hasActionableDropOff) {
+    res
+      .status(201)
+      .json(await saveAnalysis(input, logic, null, "inconclusive", null));
+    return;
+  }
 
   const saved = await saveAnalysis(input, logic, null, "loading", null);
   try {
@@ -300,6 +399,9 @@ router.post("/analyses", async (req, res): Promise<void> => {
       confidence: ai.confidence,
       status: "ok",
       errorMessage: null,
+    }, {
+      status: "loading",
+      timestamp: saved.timestamp,
     });
     if (!analysis) {
       res.status(404).json({ error: "Analysis not found" });
@@ -316,6 +418,9 @@ router.post("/analyses", async (req, res): Promise<void> => {
       confidence: "low",
       status,
       errorMessage: message,
+    }, {
+      status: "loading",
+      timestamp: saved.timestamp,
     });
     if (!analysis) {
       res.status(404).json({ error: "Analysis not found" });
@@ -348,14 +453,27 @@ router.post("/analyses/:id/retry", async (req, res): Promise<void> => {
     return;
   }
 
-  if (row.status !== "api-error" && row.status !== "ai-parse-error") {
-    res.status(400).json({ error: "Only failed analyses can be retried" });
+  const staleLoading = isStaleLoadingAnalysis(row.status, row.timestamp);
+  if (
+    row.status !== "api-error" &&
+    row.status !== "ai-parse-error" &&
+    !(row.status === "loading" && staleLoading)
+  ) {
+    res.status(400).json({
+      error: row.status === "loading"
+        ? "This investigation is still in progress. Retry is available if it becomes stale."
+        : "Only failed or stale analyses can be retried",
+    });
     return;
   }
 
   const logic = row.logic as ReturnType<typeof calculateLogic>;
   if (!logic.hasAbnormalDropOff) {
     res.status(400).json({ error: "Only analyses with flagged funnel steps can be retried" });
+    return;
+  }
+  if (logic.hasActionableDropOff === false) {
+    res.status(400).json({ error: "This analysis is inconclusive because the flagged sample is too small" });
     return;
   }
 
@@ -371,9 +489,12 @@ router.post("/analyses/:id/retry", async (req, res): Promise<void> => {
     confidence: "low",
     status: "loading",
     errorMessage: null,
+  }, {
+    status: row.status,
+    timestamp: row.timestamp,
   });
   if (!loadingAnalysis) {
-    res.status(404).json({ error: "Analysis not found" });
+    res.status(409).json({ error: "This investigation is already being retried" });
     return;
   }
 
@@ -384,6 +505,9 @@ router.post("/analyses/:id/retry", async (req, res): Promise<void> => {
       confidence: ai.confidence,
       status: "ok",
       errorMessage: null,
+    }, {
+      status: "loading",
+      timestamp: loadingAnalysis.timestamp,
     });
     if (!analysis) {
       res.status(404).json({ error: "Analysis not found" });
@@ -401,6 +525,9 @@ router.post("/analyses/:id/retry", async (req, res): Promise<void> => {
       confidence: "low",
       status,
       errorMessage: message,
+    }, {
+      status: "loading",
+      timestamp: loadingAnalysis.timestamp,
     });
     if (!analysis) {
       res.status(404).json({ error: "Analysis not found" });

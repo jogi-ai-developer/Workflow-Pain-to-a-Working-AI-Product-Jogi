@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { EvidenceStrength } from './evidenceStrength';
 import type { StepResult } from './stepResult';
 
 export interface LogicResult {
@@ -12,4 +13,7 @@ export interface LogicResult {
   steps: StepResult[];
   flaggedSteps: string[];
   hasAbnormalDropOff: boolean;
+  hasActionableDropOff: boolean;
+  hasInsufficientEvidence: boolean;
+  evidenceStrength: EvidenceStrength;
 }

@@ -21,6 +21,8 @@ export interface Analysis {
   ai: AiResult | null;
   confidence: AnalysisConfidence;
   status: AnalysisStatus;
+  /** Whether a loading investigation has exceeded the recovery threshold */
+  isStale: boolean;
   /** @nullable */
   errorMessage: string | null;
 }

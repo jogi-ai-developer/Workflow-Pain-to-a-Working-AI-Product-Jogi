@@ -133,6 +133,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "409":
+          description: Analysis is already being retried
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "502":
           description: Analysis service unavailable
           content:
@@ -207,13 +213,13 @@ components:
           minimum: 1
         entered:
           type: integer
-          minimum: 1
+          minimum: 0
         converted:
           type: integer
           minimum: 0
         description:
           type: string
-      required: [name, order, entered, converted, description]
+      required: [name, order, entered, converted]
     AnalysisInput:
       type: object
       properties:
@@ -262,7 +268,12 @@ components:
           type: integer
         isAbnormal:
           type: boolean
-      required: [name, order, entered, converted, description, conversionRate, dropOffPercent, usersLost, isAbnormal]
+        evidenceStrength:
+          $ref: "#/components/schemas/EvidenceStrength"
+      required: [name, order, entered, converted, conversionRate, dropOffPercent, usersLost, isAbnormal, evidenceStrength]
+    EvidenceStrength:
+      type: string
+      enum: [high, medium, low, insufficient]
     LogicResult:
       type: object
       properties:
@@ -278,7 +289,13 @@ components:
             type: string
         hasAbnormalDropOff:
           type: boolean
-      required: [thresholdPercent, steps, flaggedSteps, hasAbnormalDropOff]
+        hasActionableDropOff:
+          type: boolean
+        hasInsufficientEvidence:
+          type: boolean
+        evidenceStrength:
+          $ref: "#/components/schemas/EvidenceStrength"
+      required: [thresholdPercent, steps, flaggedSteps, hasAbnormalDropOff, hasActionableDropOff, hasInsufficientEvidence, evidenceStrength]
     AiResult:
       type: object
       properties:
@@ -393,10 +410,13 @@ components:
           enum: [high, medium, low]
         status:
           type: string
-          enum: [loading, ok, no-flag, api-error, ai-parse-error]
+          enum: [loading, ok, no-flag, inconclusive, api-error, ai-parse-error]
+        isStale:
+          type: boolean
+          description: Whether a loading investigation has exceeded the recovery threshold
         errorMessage:
           type: ["string", "null"]
-      required: [id, timestamp, input, steps, logic, ai, confidence, status, errorMessage]
+      required: [id, timestamp, input, steps, logic, ai, confidence, status, isStale, errorMessage]
     AnalysisRetryInput:
       type: object
       properties:
@@ -428,8 +448,11 @@ components:
           enum: [high, medium, low]
         status:
           type: string
-          enum: [loading, ok, no-flag, api-error, ai-parse-error]
-      required: [id, timestamp, flaggedSteps, confidence, status]
+          enum: [loading, ok, no-flag, inconclusive, api-error, ai-parse-error]
+        isStale:
+          type: boolean
+          description: Whether a loading investigation has exceeded the recovery threshold
+      required: [id, timestamp, flaggedSteps, confidence, status, isStale]
     AdminSummary:
       type: object
       properties:

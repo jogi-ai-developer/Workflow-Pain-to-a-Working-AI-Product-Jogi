@@ -11,9 +11,9 @@ export interface FunnelStepInput {
   name: string;
   /** @minimum 1 */
   order: number;
-  /** @minimum 1 */
+  /** @minimum 0 */
   entered: number;
   /** @minimum 0 */
   converted: number;
-  description: string;
+  description?: string;
 }

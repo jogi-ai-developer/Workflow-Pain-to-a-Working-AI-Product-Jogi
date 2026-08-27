@@ -1,1 +1,3 @@
 - [GitHub connector Git-data uploads](github-connector-html-uploads.md) — use base64 blobs; throttle Git data writes to avoid proxy rate limits.
+- [Artifact build environment](artifact-build-environment.md) — direct Vite artifact builds need the workflow-provided PORT and BASE_PATH variables.
+- [PostgreSQL catalog compatibility](postgres-catalog-compatibility.md) — prefer portable catalog fields and rendered definitions; newer constraint columns may be unavailable.

@@ -14,4 +14,6 @@ export interface AnalysisSummary {
   flaggedSteps: string[];
   confidence: AnalysisSummaryConfidence;
   status: AnalysisSummaryStatus;
+  /** Whether a loading investigation has exceeded the recovery threshold */
+  isStale: boolean;
 }

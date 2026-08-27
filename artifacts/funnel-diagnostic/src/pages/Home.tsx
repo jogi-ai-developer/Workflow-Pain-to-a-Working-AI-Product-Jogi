@@ -38,7 +38,7 @@ export default function Home({ analysisId }: HomeProps) {
                 <ArrowUpRight className="h-3.5 w-3.5" />
               </Button>
             </Link>
-            <span className="hidden sm:inline-block">Phase 3: Evidence-aware hypotheses</span>
+             <span className="hidden sm:inline-block">Phase 6: QA-ready diagnostics</span>
             <div className="h-2 w-2 rounded-full bg-success"></div>
           </div>
         </div>
@@ -58,17 +58,20 @@ export default function Home({ analysisId }: HomeProps) {
                 <Link
                   key={analysis.id}
                   href={`/analyses/${analysis.id}`}
-                  className="rounded-lg border border-border/60 bg-card p-3 text-left transition-colors hover:border-primary/40 hover:bg-primary/5"
+                  className={`rounded-lg border p-3 text-left transition-colors hover:border-primary/40 hover:bg-primary/5 ${analysis.isStale ? 'border-amber-500/40 bg-amber-500/5' : 'border-border/60 bg-card'}`}
                 >
                   <div className="flex items-center justify-between gap-3">
                     <span className="font-mono text-sm">Analysis #{analysis.id}</span>
-                    <span className={analysis.status === 'ok' ? 'text-xs text-success' : analysis.status === 'loading' ? 'text-xs text-muted-foreground' : 'text-xs text-destructive'}>
-                      {analysis.status === 'ok' ? 'Complete' : analysis.status === 'loading' ? 'Loading' : analysis.status === 'no-flag' ? 'No drop-off' : 'Needs retry'}
+                    <span className={analysis.status === 'ok' ? 'text-xs text-success' : analysis.isStale || analysis.status === 'inconclusive' ? 'text-xs font-semibold text-amber-700' : analysis.status === 'loading' ? 'text-xs text-muted-foreground' : 'text-xs text-destructive'}>
+                      {analysis.status === 'ok' ? 'Complete' : analysis.isStale ? 'Recovery needed' : analysis.status === 'loading' ? 'Loading' : analysis.status === 'no-flag' ? 'No drop-off' : analysis.status === 'inconclusive' ? 'Inconclusive' : 'Needs retry'}
                     </span>
                   </div>
                   <div className="mt-2 truncate text-xs text-muted-foreground">
                     {analysis.flaggedSteps.length > 0 ? analysis.flaggedSteps.join(', ') : 'No flagged steps'}
                   </div>
+                  {analysis.isStale && (
+                    <div className="mt-2 text-xs text-amber-800">Interrupted before AI reasoning finished — open to retry.</div>
+                  )}
                 </Link>
               ))}
             </div>

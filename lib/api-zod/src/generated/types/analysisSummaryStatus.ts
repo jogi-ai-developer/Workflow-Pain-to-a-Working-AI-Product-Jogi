@@ -13,6 +13,7 @@ export const AnalysisSummaryStatus = {
   loading: 'loading',
   ok: 'ok',
   'no-flag': 'no-flag',
+  inconclusive: 'inconclusive',
   'api-error': 'api-error',
   'ai-parse-error': 'ai-parse-error',
 } as const;

@@ -24,3 +24,17 @@ decides what to do.
 
 Read the full product definition in
 [`docs/phase-1-product-discovery.md`](docs/phase-1-product-discovery.md).
+
+## QA / Reliability
+
+The diagnostic keeps deterministic funnel math separate from AI interpretation.
+It safely handles zero-user and small-sample inputs, validates step order and
+duplicate names, and classifies observed drop-offs as high, medium, low, or
+insufficient evidence. A flagged result with insufficient evidence is shown as
+**Diagnosis inconclusive** and does not call the AI.
+
+Completed analyses, deterministic logic, AI errors, and retry state are
+persisted in PostgreSQL. Failed or stale investigations can be retried without
+duplicating the saved analysis. The release checklist, expected behavior, and
+latest verification results are recorded in
+[`docs/qa-checklist.md`](docs/qa-checklist.md).

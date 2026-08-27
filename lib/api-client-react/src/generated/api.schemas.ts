@@ -14,11 +14,11 @@ export interface FunnelStepInput {
   name: string;
   /** @minimum 1 */
   order: number;
-  /** @minimum 1 */
+  /** @minimum 0 */
   entered: number;
   /** @minimum 0 */
   converted: number;
-  description: string;
+  description?: string;
 }
 
 export interface AnalysisInput {
@@ -50,16 +50,27 @@ export interface AnalysisInput {
   additionalContext?: string;
 }
 
+export type EvidenceStrength = typeof EvidenceStrength[keyof typeof EvidenceStrength];
+
+
+export const EvidenceStrength = {
+  high: 'high',
+  medium: 'medium',
+  low: 'low',
+  insufficient: 'insufficient',
+} as const;
+
 export interface StepResult {
   name: string;
   order: number;
   entered: number;
   converted: number;
-  description: string;
+  description?: string;
   conversionRate: number;
   dropOffPercent: number;
   usersLost: number;
   isAbnormal: boolean;
+  evidenceStrength: EvidenceStrength;
 }
 
 export interface LogicResult {
@@ -67,6 +78,9 @@ export interface LogicResult {
   steps: StepResult[];
   flaggedSteps: string[];
   hasAbnormalDropOff: boolean;
+  hasActionableDropOff: boolean;
+  hasInsufficientEvidence: boolean;
+  evidenceStrength: EvidenceStrength;
 }
 
 export type AiResultConfidence = typeof AiResultConfidence[keyof typeof AiResultConfidence];
@@ -171,6 +185,7 @@ export const AnalysisStatus = {
   loading: 'loading',
   ok: 'ok',
   'no-flag': 'no-flag',
+  inconclusive: 'inconclusive',
   'api-error': 'api-error',
   'ai-parse-error': 'ai-parse-error',
 } as const;
@@ -184,6 +199,8 @@ export interface Analysis {
   ai: AiResult | null;
   confidence: AnalysisConfidence;
   status: AnalysisStatus;
+  /** Whether a loading investigation has exceeded the recovery threshold */
+  isStale: boolean;
   /** @nullable */
   errorMessage: string | null;
 }
@@ -222,6 +239,7 @@ export const AnalysisSummaryStatus = {
   loading: 'loading',
   ok: 'ok',
   'no-flag': 'no-flag',
+  inconclusive: 'inconclusive',
   'api-error': 'api-error',
   'ai-parse-error': 'ai-parse-error',
 } as const;
@@ -232,6 +250,8 @@ export interface AnalysisSummary {
   flaggedSteps: string[];
   confidence: AnalysisSummaryConfidence;
   status: AnalysisSummaryStatus;
+  /** Whether a loading investigation has exceeded the recovery threshold */
+  isStale: boolean;
 }
 
 export type AdminSummaryConfidenceCounts = {

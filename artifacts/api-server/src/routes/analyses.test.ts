@@ -1,5 +1,6 @@
 import express from 'express';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { analysesTable, db } from '@workspace/db';
 import analysesRouter from './analyses';
 
 const nativeFetch = globalThis.fetch;
@@ -135,6 +136,94 @@ describe('POST /analyses', () => {
     }
   });
 
+  test('accepts zero-user funnels without producing non-finite metrics', async () => {
+    const fetchMock = vi.fn();
+    globalThis.fetch = fetchMock;
+
+    const response = await postAnalysis({
+      steps: [
+        { name: 'Landing', order: 1, entered: 0, converted: 0 },
+        { name: 'Signup', order: 2, entered: 0, converted: 0 },
+        { name: 'Purchase', order: 3, entered: 0, converted: 0 },
+      ],
+    });
+    const body = await readBody(response);
+
+    expect(response.status).toBe(201);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(body.status).toBe('no-flag');
+    expect(JSON.stringify(body.logic)).not.toMatch(/NaN|Infinity/);
+    expect(body.logic.steps[0]).toMatchObject({
+      conversionRate: 0,
+      dropOffPercent: 0,
+      evidenceStrength: 'insufficient',
+    });
+  });
+
+  test('returns an explicit inconclusive result for a tiny flagged sample', async () => {
+    const fetchMock = vi.fn();
+    globalThis.fetch = fetchMock;
+
+    const response = await postAnalysis({
+      steps: [
+        { name: 'Landing', order: 1, entered: 10, converted: 5 },
+        { name: 'Signup', order: 2, entered: 5, converted: 5 },
+        { name: 'Purchase', order: 3, entered: 5, converted: 5 },
+      ],
+    });
+    const body = await readBody(response);
+
+    expect(response.status).toBe(201);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(body.status).toBe('inconclusive');
+    expect(body.ai).toBeNull();
+    expect(body.logic).toMatchObject({
+      hasAbnormalDropOff: true,
+      hasActionableDropOff: false,
+      hasInsufficientEvidence: true,
+      evidenceStrength: 'insufficient',
+    });
+  });
+
+  test('rejects duplicate names and increasing users between steps', async () => {
+    const duplicateNames = await postAnalysis({
+      steps: [
+        { name: 'Landing', order: 1, entered: 100, converted: 90 },
+        { name: ' landing ', order: 2, entered: 90, converted: 80 },
+        { name: 'Purchase', order: 3, entered: 80, converted: 70 },
+      ],
+    });
+    expect(duplicateNames.status).toBe(400);
+    const duplicateError = await duplicateNames.json() as { error?: string };
+    expect(duplicateError.error).toContain('Step names must be unique');
+
+    const increasingUsers = await postAnalysis({
+      steps: [
+        { name: 'Landing', order: 1, entered: 100, converted: 60 },
+        { name: 'Signup', order: 2, entered: 61, converted: 50 },
+        { name: 'Purchase', order: 3, entered: 50, converted: 40 },
+      ],
+    });
+    expect(increasingUsers.status).toBe(400);
+    const increasingError = await increasingUsers.json() as { error?: string };
+    expect(increasingError.error).toContain('Users cannot increase');
+  });
+
+  test('normalizes missing descriptions before persistence and AI context construction', async () => {
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({
+      choices: [{ message: { content: JSON.stringify(aiResponse) } }],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+
+    const response = await postAnalysis({
+      steps: flaggedSteps.map(({ description: _description, ...step }) => step),
+    });
+    const body = await readBody(response);
+
+    expect(response.status).toBe(201);
+    expect(body.status).toBe('ok');
+    expect(body.input.steps.every((step) => step.description === '')).toBe(true);
+  });
+
   test('does not call the AI for a no-flag funnel and returns deterministic results', async () => {
     const fetchMock = vi.fn();
     globalThis.fetch = fetchMock;
@@ -155,6 +244,7 @@ describe('POST /analyses', () => {
       dropOffPercent: 10,
       usersLost: 90,
       isAbnormal: false,
+      evidenceStrength: 'low',
     });
   });
 
@@ -196,6 +286,8 @@ describe('POST /analyses', () => {
       'stepDescription',
       'recentChanges',
       'additionalContext',
+      'evidenceStrength',
+      'hasInsufficientEvidence',
     ]);
     expect(evidence.additionalContext).toBe('The payment provider migration launched last week.');
     expect(evidence.flaggedSteps).toEqual([{
@@ -207,6 +299,7 @@ describe('POST /analyses', () => {
       dropOffPercent: 66.67,
       usersLost: 600,
       isAbnormal: true,
+       evidenceStrength: 'high',
       stepDescription: 'Started checkout',
       sampleSize: 900,
       previousStep: expect.objectContaining({ name: 'Landing page' }),
@@ -320,5 +413,95 @@ describe('POST /analyses', () => {
     expect(retryContext.funnelGoal).toBe('Increase completed purchases');
     expect(retryContext.recentChanges).toBe('Checkout redesign launched last week');
     expect(retryContext.additionalContext).toBe('Payment errors are suspected');
+  });
+
+  test('allows only one concurrent retry of a stale loading investigation', async () => {
+    const [staleAnalysis] = await db
+      .insert(analysesTable)
+      .values({
+        timestamp: new Date(Date.now() - 120_000).toISOString(),
+        steps: flaggedSteps,
+        logic: {
+          thresholdPercent: 40,
+          steps: [
+            {
+              ...flaggedSteps[0],
+              conversionRate: 90,
+              dropOffPercent: 10,
+              usersLost: 100,
+              isAbnormal: false,
+            },
+            {
+              ...flaggedSteps[1],
+              conversionRate: 33.33,
+              dropOffPercent: 66.67,
+              usersLost: 600,
+              isAbnormal: true,
+            },
+            {
+              ...flaggedSteps[2],
+              conversionRate: 90,
+              dropOffPercent: 10,
+              usersLost: 30,
+              isAbnormal: false,
+            },
+          ],
+          flaggedSteps: ['Checkout'],
+          hasAbnormalDropOff: true,
+        },
+        ai: null,
+        confidence: 'low',
+        status: 'loading',
+        errorMessage: null,
+      })
+      .returning();
+    if (!staleAnalysis) {
+      throw new Error('Failed to seed stale analysis');
+    }
+
+    let resolveAI!: (response: Response) => void;
+    const pendingAI = new Promise<Response>((resolve) => {
+      resolveAI = resolve;
+    });
+    const fetchMock = vi.fn(() => pendingAI);
+    globalThis.fetch = fetchMock;
+
+    const retryRequests = [
+      postRetry(staleAnalysis.id, {}),
+      postRetry(staleAnalysis.id, {}),
+    ];
+    for (let attempt = 0; attempt < 100 && fetchMock.mock.calls.length === 0; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await Promise.race(retryRequests);
+    resolveAI(new Response(JSON.stringify({
+      choices: [{ message: { content: JSON.stringify(aiResponse) } }],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+
+    const retryResponses = await Promise.all(retryRequests);
+    const retryResults = await Promise.all(retryResponses.map(readBody));
+    const winner = retryResults.find((result) => result.status === 'ok');
+    const conflict = retryResults.find((result) => result.status !== 'ok');
+
+    expect(retryResponses.filter((response) => response.status === 200)).toHaveLength(1);
+    expect(retryResponses.filter((response) => response.status === 400 || response.status === 409)).toHaveLength(1);
+    expect(winner).toMatchObject({
+      id: staleAnalysis.id,
+      status: 'ok',
+      ai: { hypotheses: aiResponse.hypotheses },
+    });
+    expect(conflict).toMatchObject({
+      error: expect.stringMatching(/already being retried|still in progress/),
+    });
+
+    const persisted = await getAnalysis(staleAnalysis.id).then(readBody);
+    expect(persisted).toMatchObject({
+      id: staleAnalysis.id,
+      status: 'ok',
+      ai: { hypotheses: aiResponse.hypotheses },
+      errorMessage: null,
+    });
   });
 });

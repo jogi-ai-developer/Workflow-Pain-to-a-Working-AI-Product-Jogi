@@ -1,0 +1,243 @@
+PHASE 5 — ADMIN DASHBOARD
+
+Build the Admin Dashboard for the Funnel Drop-off Diagnosis Tool.
+
+IMPORTANT:
+Keep this phase minimal and focused.
+
+DO NOT:
+- redesign the main product
+- change the AI architecture
+- change deterministic funnel logic
+- change the database schema unless absolutely necessary
+- add authentication
+- add user management
+- add analytics integrations
+- add charts that don't support a clear decision
+- add new AI features
+- add CSV import/export
+- add pagination unless required
+- start deployment/documentation work
+
+The goal is to prove that persisted analyses can be monitored through a simple operational dashboard.
+
+---
+
+## EXISTING ARCHITECTURE
+
+The application currently has:
+
+Input
+→ Validation
+→ Deterministic Logic
+→ AI Reasoning
+→ Structured Result
+→ PostgreSQL Persistence
+
+Existing API endpoints include:
+
+GET /analyses
+GET /analyses/:id
+GET /admin/summary
+
+Reuse these APIs.
+
+Do NOT create a second source of truth.
+
+---
+
+# DASHBOARD REQUIREMENTS
+
+Create a dedicated Admin Dashboard route/page.
+
+Keep the existing visual design language.
+
+The dashboard should contain:
+
+## 1. Summary cards
+
+Show:
+
+- Total analyses
+- Flagged analyses
+- No-flag analyses
+- AI failures
+
+Use the existing `/admin/summary` endpoint where possible.
+
+---
+
+## 2. Recent analyses
+
+Display a table/list of recent analyses.
+
+Each row should show:
+
+- Analysis ID
+- Date/time
+- Flagged step(s)
+- Status
+- Confidence
+
+Newest first.
+
+---
+
+## 3. Analysis detail
+
+Clicking an analysis should allow the admin to inspect the existing persisted analysis.
+
+Show:
+
+- Funnel steps
+- Deterministic drop-off results
+- Flagged steps
+- Evidence/context
+- AI hypotheses
+- Missing evidence
+- Suggested investigation
+- Suggested experiment
+- Confidence
+- Status/errors
+
+Reuse the existing analysis data.
+
+Do not generate new AI output.
+
+---
+
+## 4. Useful filtering
+
+Add only simple filters:
+
+- All
+- Flagged
+- No flag
+- AI error
+
+Do not build advanced analytics.
+
+---
+
+# DASHBOARD PURPOSE
+
+The dashboard should answer:
+
+1. How many analyses have been run?
+2. How many contained meaningful drop-offs?
+3. How often does AI fail?
+4. What are the most recent analyses?
+5. What happened in a specific analysis?
+
+If a component does not help answer one of these questions, don't add it.
+
+---
+
+# IMPORTANT PRODUCT PRINCIPLE
+
+The dashboard must distinguish:
+
+DETERMINISTIC SIGNAL
+
+from
+
+AI INTERPRETATION
+
+For example:
+
+Evidence:
+"Checkout dropped 66.67%."
+
+AI:
+"Payment friction is a possible hypothesis."
+
+Never present an AI hypothesis as an established fact.
+
+---
+
+# ERROR HANDLING
+
+Handle:
+
+- dashboard loading
+- empty database
+- API failure
+- missing analysis
+- malformed data
+
+Use friendly UI states.
+
+Do not expose stack traces.
+
+---
+
+# RESPONSIVENESS
+
+The dashboard should work on desktop and reasonably on smaller screens.
+
+Do not spend excessive time on responsive edge cases.
+
+---
+
+# TESTING
+
+Actually test:
+
+1. Dashboard with zero analyses.
+2. Dashboard with healthy/no-flag analyses.
+3. Dashboard with flagged analyses.
+4. Dashboard with AI failures.
+5. Open an individual analysis.
+6. Refresh the page and confirm data persists.
+7. Verify filters return the correct records.
+
+Run:
+
+- typecheck
+- tests
+- build
+
+Do not claim success unless they were actually run.
+
+---
+
+# CODE QUALITY
+
+Reuse existing components and API types where possible.
+
+Avoid duplicated logic.
+
+Do not create mock dashboard data.
+
+The dashboard must use the real persisted database data.
+
+---
+
+# GIT
+
+Create ONE meaningful commit:
+
+feat: add admin dashboard
+
+Do not squash or rewrite previous commits.
+
+Do not modify previous phase commits.
+
+---
+
+# FINAL RESPONSE
+
+Report:
+
+1. Dashboard route
+2. Components added
+3. APIs reused
+4. Filters implemented
+5. Tests actually run
+6. Build/typecheck results
+7. Git commit SHA
+8. Any remaining limitations
+
+Then STOP.
+
+Do not start another phase.

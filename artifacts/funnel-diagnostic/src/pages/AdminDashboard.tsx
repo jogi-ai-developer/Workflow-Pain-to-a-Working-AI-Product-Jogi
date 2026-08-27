@@ -101,6 +101,7 @@ function formatDate(value: string): string {
 
 function statusLabel(status: AnalysisStatus): string {
   if (status === 'no-flag') return 'No flag';
+  if (status === 'inconclusive') return 'Inconclusive';
   if (status === 'ai-parse-error') return 'AI parse error';
   if (status === 'api-error') return 'AI error';
   return 'Complete';
@@ -109,6 +110,7 @@ function statusLabel(status: AnalysisStatus): string {
 function statusClassName(status: AnalysisStatus): string {
   if (status === 'ok') return 'border-success/30 bg-success/10 text-success';
   if (status === 'no-flag') return 'border-border bg-muted text-muted-foreground';
+  if (status === 'inconclusive') return 'border-amber-500/30 bg-amber-500/10 text-amber-800';
   return 'border-destructive/30 bg-destructive/10 text-destructive';
 }
 
@@ -165,6 +167,7 @@ function StatusBadge({ status }: { status: AnalysisStatus }) {
     <Badge variant="outline" className={cn('font-medium', statusClassName(status))}>
       {status === 'ok' && <CheckCircle2 className="mr-1 h-3 w-3" />}
       {status === 'no-flag' && <ShieldCheck className="mr-1 h-3 w-3" />}
+      {status === 'inconclusive' && <AlertTriangle className="mr-1 h-3 w-3" />}
       {(status === 'api-error' || status === 'ai-parse-error') && (
         <AlertTriangle className="mr-1 h-3 w-3" />
       )}

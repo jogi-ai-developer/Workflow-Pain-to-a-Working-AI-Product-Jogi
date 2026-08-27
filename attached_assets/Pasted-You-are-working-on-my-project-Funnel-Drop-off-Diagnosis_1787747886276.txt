@@ -1,0 +1,711 @@
+You are working on my project:
+
+# Funnel Drop-off Diagnosis Tool
+
+This project is part of the "Workflow Pain to a Working AI Product" assignment.
+
+IMPORTANT:
+We are currently completing **PHASE 1 — PRODUCT DISCOVERY**.
+
+Do NOT proceed to new product development or AI integration yet.
+
+Your job is to document and solidify the product thinking before we continue implementation.
+
+---
+
+# ASSIGNMENT PRINCIPLE
+
+The assignment evaluates whether I can:
+
+1. Start from a real professional workflow pain
+2. Define a clear user
+3. Define a strong JTBD
+4. Decide where AI genuinely adds value
+5. Combine deterministic logic with AI
+6. Design for failure
+7. Build a prototype that proves the thinking
+
+The prototype is evidence.
+
+The thinking is the work.
+
+---
+
+# SELECTED TRACK
+
+## Track 3 — Marketing & Growth
+
+### Funnel Drop-off Diagnosis Tool
+
+### User
+
+A growth manager analyzing funnel metrics without knowing why users drop off.
+
+### Trigger Moment
+
+A funnel shows a sharp drop with no clear explanation.
+
+### Original JTBD
+
+"When I see a drop in conversion,
+I want to understand the cause and what to test,
+so I can improve the funnel."
+
+We are allowed to refine this JTBD if a stronger version emerges during Phase 1.
+
+---
+
+# PRODUCT DIRECTION
+
+Do NOT build a generic:
+
+"AI Funnel Analyzer"
+
+Instead, explore this product concept:
+
+> A diagnostic decision-support tool that uses deterministic funnel analysis to identify meaningful drop-offs, then uses AI to generate evidence-based hypotheses and recommend what the user should investigate or test next.
+
+Core principle:
+
+DATA tells us WHERE the problem is.
+
+LOGIC determines WHETHER the drop is meaningful.
+
+AI helps reason about WHY it might be happening.
+
+HUMAN decides WHAT to do.
+
+Do not claim that the system can know the true causal reason for a funnel drop.
+
+---
+
+# CURRENT REPOSITORY
+
+First inspect the existing repository.
+
+IMPORTANT:
+
+Do NOT delete, overwrite, or unnecessarily refactor existing work.
+
+There are already implementation commits and application files in the repository.
+
+Preserve them.
+
+Your Phase 1 task is primarily documentation and product definition.
+
+---
+
+# PHASE 1 DELIVERABLE
+
+Create:
+
+`docs/phase-1-product-discovery.md`
+
+This document should become the authoritative product-thinking document for the project.
+
+---
+
+# SECTION 1 — PROBLEM STATEMENT
+
+Clearly define:
+
+### Who has the problem?
+
+Growth/Product Manager.
+
+### What are they trying to do?
+
+Diagnose a meaningful conversion drop and determine what to investigate next.
+
+### What happens today?
+
+Describe the current workflow:
+
+1. Review analytics
+2. Identify funnel drop
+3. Inspect individual steps
+4. Compare metrics
+5. Look at segments/context
+6. Check recent product changes
+7. Form hypotheses
+8. Decide what to investigate
+9. Decide what experiment to run
+
+Do not assume every user follows exactly this workflow.
+
+Explain where the workflow becomes difficult.
+
+### Pain
+
+Distinguish:
+
+- observable symptom
+- underlying problem
+- consequence
+
+Avoid generic language such as:
+
+"Users struggle with analytics."
+
+---
+
+# SECTION 2 — USER PERSONA
+
+Define one primary persona.
+
+Include:
+
+- role
+- responsibilities
+- goals
+- tools
+- technical/data literacy
+- workflow
+- frustrations
+- decision-making responsibilities
+- desired outcome
+
+Explain why this is the correct primary user.
+
+Do not invent fake customer interviews or research.
+
+Clearly label assumptions.
+
+---
+
+# SECTION 3 — JTBD
+
+Create the strongest possible JTBD.
+
+Use:
+
+"When [situation],
+I want to [motivation],
+so that [desired outcome]."
+
+Also define:
+
+### Functional job
+
+### Emotional job
+
+### Professional/social job
+
+Explain why this JTBD is more useful than:
+
+"Analyze my funnel."
+
+---
+
+# SECTION 4 — CURRENT ALTERNATIVES
+
+Analyze how the user currently solves the problem.
+
+Consider:
+
+- Mixpanel
+- Amplitude
+- Google Analytics
+- SQL
+- spreadsheets
+- dashboards
+- session recordings
+- talking to engineers/product teams
+- manual analysis
+
+Do not claim specific features unless verified.
+
+Explain:
+
+### What existing tools do well
+
+### Where the workflow still breaks
+
+### Product opportunity
+
+The opportunity should NOT simply be:
+
+"Existing tools don't have AI."
+
+The product must solve a workflow problem.
+
+---
+
+# SECTION 5 — WHY AI?
+
+This is critical.
+
+Explain precisely why AI is useful.
+
+Potential AI responsibilities include:
+
+- synthesizing multiple contextual signals
+- generating competing hypotheses
+- explaining possible causes
+- identifying what evidence is missing
+- suggesting investigations
+- suggesting experiments
+
+Evaluate these critically.
+
+Do not use AI simply because the assignment requires an AI component.
+
+---
+
+# SECTION 6 — WHAT SHOULD NOT USE AI?
+
+Define deterministic responsibilities.
+
+These should include, where appropriate:
+
+- input validation
+- data validation
+- conversion calculation
+- drop-off calculation
+- users lost calculation
+- identifying largest drop
+- threshold checks
+- sample-size checks
+- data consistency checks
+- identifying diagnostic signals
+
+Explain why deterministic code is more appropriate.
+
+Principle:
+
+> If the answer can be reliably calculated with deterministic code, don't ask an LLM to calculate it.
+
+---
+
+# SECTION 7 — LOGIC VS AI
+
+Create this table:
+
+| Task | Deterministic Logic | AI | Why |
+|---|---|---|---|
+
+At minimum evaluate:
+
+- input validation
+- conversion calculation
+- drop-off calculation
+- abnormal-drop detection
+- sample-size sufficiency
+- critical-step identification
+- hypothesis generation
+- hypothesis ranking
+- evidence explanation
+- confidence
+- investigation recommendation
+- experiment recommendation
+
+Then define exactly what structured information the logic layer will send to the LLM.
+
+---
+
+# SECTION 8 — PRODUCT HYPOTHESIS
+
+Write:
+
+> If we provide ______,
+> then ______,
+> because ______.
+
+Identify:
+
+- assumptions
+- risks
+- riskiest assumption
+- how the prototype can test that assumption
+
+Do not fabricate validation evidence.
+
+---
+
+# SECTION 9 — FAILURE MODE ANALYSIS
+
+Primary failure mode:
+
+## Generic or unjustified diagnosis
+
+Also analyze:
+
+1. False diagnosis
+2. AI overconfidence
+3. Insufficient sample size
+4. Instrumentation/data-quality problems
+5. Correlation presented as causation
+6. Generic recommendations
+7. AI inventing evidence
+8. Over-flagging healthy funnel steps
+
+Create:
+
+| Failure Mode | Cause | User Impact | Prevention | Detection | Product Response |
+|---|---|---|---|---|---|
+
+---
+
+# SECTION 10 — INCONCLUSIVE STATE
+
+This is a mandatory trust feature.
+
+The product must be allowed to say:
+
+> Diagnosis inconclusive.
+
+Define when this should happen.
+
+Examples:
+
+- insufficient sample size
+- insufficient context
+- conflicting evidence
+- no meaningful abnormality
+- suspected instrumentation issue
+- insufficient evidence for a hypothesis
+
+Explain why refusing to guess can be more valuable than producing an answer.
+
+---
+
+# SECTION 11 — CONFIDENCE
+
+Define what confidence means.
+
+Do NOT create arbitrary confidence percentages.
+
+Prefer:
+
+- High
+- Medium
+- Low
+
+Confidence should represent the strength of evidence supporting a hypothesis.
+
+It should NOT mean:
+
+"The probability that this is definitely the cause."
+
+Clearly distinguish:
+
+**Evidence strength ≠ causal certainty**
+
+---
+
+# SECTION 12 — MVP
+
+Define:
+
+## MUST HAVE
+
+Only features necessary to prove the core product thesis.
+
+Expected examples:
+
+- structured funnel input
+- validation
+- deterministic funnel calculations
+- meaningful-drop detection
+- AI hypothesis generation
+- evidence
+- missing evidence
+- confidence
+- recommended investigation
+- one experiment
+- saved analysis
+- history
+- admin dashboard
+- error handling
+
+## SHOULD HAVE
+
+Useful but not essential.
+
+## COULD HAVE
+
+Future enhancements.
+
+## WON'T HAVE
+
+Explicitly exclude:
+
+- direct Mixpanel integrations
+- direct Amplitude integrations
+- GA4 integrations
+- real-time analytics
+- session replay integrations
+- autonomous experimentation
+- automatic A/B test deployment
+
+Unless there is a compelling reason otherwise.
+
+---
+
+# SECTION 13 — FEATURE PRIORITIZATION
+
+Create:
+
+| Feature | User Value | Effort | Risk | Priority |
+|---|---|---|---|---|
+
+Use:
+
+Low / Medium / High.
+
+Prioritize features based on the JTBD.
+
+Do not prioritize technical complexity or visual impressiveness.
+
+---
+
+# SECTION 14 — SUCCESS CRITERIA
+
+Define measurable criteria.
+
+Examples:
+
+- Funnel metrics are calculated correctly.
+- Meaningful drop-offs are identified consistently.
+- Small/insufficient samples do not trigger unjustified diagnoses.
+- Every AI hypothesis has supporting evidence.
+- AI clearly identifies missing evidence.
+- The product can return "Diagnosis inconclusive."
+- Every useful diagnosis produces one actionable investigation or experiment.
+- The AI does not claim unsupported facts.
+
+Separate:
+
+### Product success metrics
+
+from
+
+### System quality metrics.
+
+---
+
+# SECTION 15 — AI TRADE-OFFS
+
+Discuss:
+
+- hallucination
+- false positives
+- false negatives
+- overconfidence
+- explainability
+- latency
+- cost
+- reliability
+- deterministic alternatives
+- human oversight
+
+Then explain why AI remains justified.
+
+---
+
+# SECTION 16 — COST & SUSTAINABILITY
+
+Create a simple MVP cost model.
+
+Discuss:
+
+- number of LLM calls per analysis
+- prompt size
+- output size
+- database storage
+- infrastructure
+- scaling
+- unnecessary AI calls
+
+Important principle:
+
+> Deterministic logic should eliminate unnecessary LLM calls.
+
+Clearly label all estimates as estimates.
+
+---
+
+# SECTION 17 — UX PRINCIPLES
+
+Define 5–8 principles.
+
+Examples:
+
+1. Evidence before explanation
+2. Never present hypotheses as facts
+3. Show why a step was flagged
+4. Let users inspect underlying numbers
+5. Prefer "inconclusive" over false certainty
+6. Keep AI output concise
+7. Make the next action explicit
+8. Keep the deterministic analysis visible
+
+---
+
+# SECTION 18 — CORE USER FLOW
+
+Document:
+
+Structured Input
+↓
+Validation
+↓
+Deterministic Analysis
+↓
+Diagnostic Signals
+↓
+AI Reasoning
+↓
+Hypotheses
+↓
+Evidence
+↓
+Confidence
+↓
+Investigation
+↓
+Experiment
+↓
+Database Storage
+
+Explain what happens at every stage.
+
+---
+
+# SECTION 19 — SCREEN STRUCTURE
+
+Do NOT implement these yet.
+
+Document the intended screens:
+
+### 1. Funnel Builder / Input
+
+Purpose:
+Create a funnel and enter metrics.
+
+### 2. Diagnostic Results
+
+Purpose:
+Show the meaningful drop and reasoning.
+
+### 3. Analysis History
+
+Purpose:
+Review previous analyses.
+
+### 4. Admin Dashboard
+
+Purpose:
+Understand system usage, analysis status, confidence, errors, etc.
+
+For each screen define:
+
+- purpose
+- information hierarchy
+- primary action
+- important UX considerations
+
+---
+
+# SECTION 20 — PHASE 1 SELF-CRITIQUE
+
+Act as a strict evaluator.
+
+Score the concept out of 10 for:
+
+- Problem clarity
+- User specificity
+- JTBD
+- Why AI
+- Logic/AI separation
+- Failure-mode awareness
+- MVP discipline
+- Differentiation
+- Technical feasibility
+- Assignment fit
+
+Any score below 8 requires an explanation and recommendation.
+
+Then provide:
+
+### Top 5 risks
+
+### Top 5 improvements
+
+### One thing we should NOT build
+
+---
+
+# IMPORTANT RULES
+
+Do NOT:
+
+- fabricate user interviews
+- fabricate customer research
+- fabricate statistics
+- claim causal certainty
+- claim AI can determine the true cause
+- use AI for deterministic mathematics
+- make the MVP unnecessarily large
+- add features just because they sound impressive
+- claim anything has been validated unless it actually has
+- modify the existing application unnecessarily
+- delete existing work
+
+If something is an assumption, label it clearly.
+
+---
+
+# README
+
+After creating the Phase 1 document, update:
+
+`README.md`
+
+Add a concise section:
+
+## Phase 1 — Product Discovery
+
+Include:
+
+- product thesis
+- JTBD
+- logic + AI principle
+- link to `docs/phase-1-product-discovery.md`
+
+Do not turn the README into the entire Product Brief.
+
+---
+
+# GIT
+
+Create ONE meaningful commit:
+
+`docs: complete phase 1 product discovery`
+
+Do not rewrite existing history.
+
+Do not squash previous commits.
+
+---
+
+# FINAL RESPONSE
+
+When finished, report:
+
+1. Phase 1 completed: YES/NO
+2. JTBD
+3. Product thesis
+4. Logic vs AI boundary
+5. Primary failure mode
+6. MVP scope
+7. Files created/modified
+8. Git commit SHA
+9. Phase 1 self-score
+10. Biggest remaining weakness
+
+Then STOP.
+
+Do NOT proceed to Phase 2.
+
+Wait for my explicit instruction.

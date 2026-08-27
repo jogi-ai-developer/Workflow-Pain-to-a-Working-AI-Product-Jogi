@@ -19,6 +19,7 @@ export * from './analysisSummary';
 export * from './analysisSummaryConfidence';
 export * from './analysisSummaryStatus';
 export * from './error';
+export * from './evidenceStrength';
 export * from './funnelStepInput';
 export * from './healthStatus';
 export * from './hypothesisRequest';

@@ -5,15 +5,17 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { EvidenceStrength } from './evidenceStrength';
 
 export interface StepResult {
   name: string;
   order: number;
   entered: number;
   converted: number;
-  description: string;
+  description?: string;
   conversionRate: number;
   dropOffPercent: number;
   usersLost: number;
   isAbnormal: boolean;
+  evidenceStrength: EvidenceStrength;
 }

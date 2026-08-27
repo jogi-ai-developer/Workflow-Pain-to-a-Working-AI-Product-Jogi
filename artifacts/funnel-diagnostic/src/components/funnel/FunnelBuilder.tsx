@@ -18,7 +18,7 @@ import {
 const stepSchema = z.object({
   name: z.string().min(1, "Name is required"),
   order: z.number().int().min(1),
-  entered: z.coerce.number({ error: "Must be a number" }).int("Must be integer").min(1, "Must be > 0"),
+  entered: z.coerce.number({ error: "Must be a number" }).int("Must be integer").min(0, "Must be >= 0"),
   converted: z.coerce.number({ error: "Must be a number" }).int("Must be integer").min(0, "Must be >= 0"),
   description: z.string().optional().default(""),
 }).refine(data => data.converted <= data.entered, {
@@ -40,6 +40,20 @@ const formSchema = z.object({
 }, {
   message: "Step orders must be unique",
   path: ["steps"]
+}).refine(data => {
+  const names = data.steps.map((step) => step.name.trim().toLowerCase());
+  return new Set(names).size === names.length;
+}, {
+  message: "Step names must be unique",
+  path: ["steps"]
+}).refine(data => {
+  const orderedSteps = [...data.steps].sort((a, b) => a.order - b.order);
+  return orderedSteps.every((step, index) =>
+    index === 0 || step.entered <= orderedSteps[index - 1].converted
+  );
+}, {
+  message: "Users cannot increase between funnel steps",
+  path: ["steps"]
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -59,7 +73,7 @@ export function FunnelBuilder({ analysisId, onAnalysisSaved }: FunnelBuilderProp
   const [analysisData, setAnalysisData] = useState<FunnelAnalysis | null>(null);
   const [serverAnalysis, setServerAnalysis] = useState<Analysis | null>(null);
   const [analysisInput, setAnalysisInput] = useState<AnalysisInput | null>(null);
-  const [requestState, setRequestState] = useState<'idle' | 'loading' | 'complete' | 'not-needed' | 'error'>('idle');
+  const [requestState, setRequestState] = useState<'idle' | 'loading' | 'stale' | 'complete' | 'not-needed' | 'inconclusive' | 'error'>('idle');
   const [requestError, setRequestError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -117,7 +131,10 @@ export function FunnelBuilder({ analysisId, onAnalysisSaved }: FunnelBuilderProp
 
         setServerAnalysis(result);
         setAnalysisInput(result.input);
-        setAnalysisData(analyzeFunnel(result.steps));
+         setAnalysisData(analyzeFunnel(result.steps.map((step) => ({
+           ...step,
+           description: step.description ?? "",
+         }))));
         setRequestError(result.errorMessage);
         setLoadError(null);
         setRequestState(
@@ -125,12 +142,14 @@ export function FunnelBuilder({ analysisId, onAnalysisSaved }: FunnelBuilderProp
             ? 'complete'
             : result.status === 'no-flag'
               ? 'not-needed'
+              : result.status === 'inconclusive'
+                ? 'inconclusive'
               : result.status === 'loading'
-                ? 'loading'
+                ? result.isStale ? 'stale' : 'loading'
                 : 'error',
         );
 
-        if (result.status === 'loading') {
+        if (result.status === 'loading' && !result.isStale) {
           refreshTimer = setTimeout(loadSavedAnalysis, 2000);
         }
       } catch (error) {
@@ -156,7 +175,13 @@ export function FunnelBuilder({ analysisId, onAnalysisSaved }: FunnelBuilderProp
     try {
       const result = await createAnalysis(input);
       setServerAnalysis(result);
-      setRequestState(result.status === 'ok' ? 'complete' : 'error');
+       setRequestState(
+         result.status === 'ok'
+           ? 'complete'
+           : result.status === 'inconclusive'
+             ? 'inconclusive'
+             : 'error',
+       );
       if (result.errorMessage) {
         setRequestError(result.errorMessage);
       }
@@ -191,6 +216,10 @@ export function FunnelBuilder({ analysisId, onAnalysisSaved }: FunnelBuilderProp
       setRequestState('not-needed');
       return;
     }
+    if (!deterministic.hasActionableDropOff) {
+      setRequestState('inconclusive');
+      return;
+    }
 
     await requestAnalysis(input);
   };
@@ -209,7 +238,13 @@ export function FunnelBuilder({ analysisId, onAnalysisSaved }: FunnelBuilderProp
         ...(retryInput.additionalContext ? { additionalContext: retryInput.additionalContext } : {}),
       });
       setServerAnalysis(result);
-      setRequestState(result.status === 'ok' ? 'complete' : 'error');
+       setRequestState(
+         result.status === 'ok'
+           ? 'complete'
+           : result.status === 'inconclusive'
+             ? 'inconclusive'
+             : 'error',
+       );
       if (result.errorMessage) {
         setRequestError(result.errorMessage);
       }
@@ -309,12 +344,16 @@ export function FunnelBuilder({ analysisId, onAnalysisSaved }: FunnelBuilderProp
                 <div>
                   <div className="font-semibold">
                     {analysisData.hasAbnormalDropOff
-                      ? `${flaggedCount} meaningful drop-off${flaggedCount === 1 ? '' : 's'} detected`
+                      ? analysisData.hasActionableDropOff
+                        ? `${flaggedCount} meaningful drop-off${flaggedCount === 1 ? '' : 's'} detected`
+                        : 'Diagnosis inconclusive'
                       : 'No meaningful drop-off detected'}
                   </div>
                   <div className="mt-1 text-sm text-muted-foreground">
                     {analysisData.hasAbnormalDropOff
-                      ? `${analysisData.flaggedSteps.join(', ')} ${flaggedCount === 1 ? 'is' : 'are'} at or above the ${analysisData.thresholdPercent}% drop-off threshold.`
+                      ? analysisData.hasActionableDropOff
+                        ? `${analysisData.flaggedSteps.join(', ')} ${flaggedCount === 1 ? 'is' : 'are'} at or above the ${analysisData.thresholdPercent}% drop-off threshold.`
+                        : 'The percentage signal is based on too little observed volume to support hypothesis generation. Collect more data before drawing conclusions.'
                       : `Every step is below the ${analysisData.thresholdPercent}% drop-off threshold, so no AI reasoning is needed.`}
                   </div>
                 </div>
@@ -376,11 +415,15 @@ export function FunnelBuilder({ analysisId, onAnalysisSaved }: FunnelBuilderProp
                           <div className="text-xs uppercase tracking-wider text-muted-foreground">Users lost</div>
                           <div className="mt-1 font-mono font-semibold">{step.usersLost.toLocaleString()}</div>
                         </div>
+                        <div>
+                          <div className="text-xs uppercase tracking-wider text-muted-foreground">Evidence strength</div>
+                          <div className="mt-1 font-semibold capitalize">{step.evidenceStrength}</div>
+                        </div>
                       </div>
 
                       {step.isAbnormal && (
                         <div className="mt-3 border-t border-amber-500/20 pt-3 text-xs text-amber-800">
-                          Flagged because {step.dropOffPercent.toFixed(2)}% of users were lost at this step, meeting the {analysisData.thresholdPercent}% threshold.
+                          Flagged because {step.dropOffPercent.toFixed(2)}% of users were lost at this step, meeting the {analysisData.thresholdPercent}% threshold. Evidence strength: {step.evidenceStrength}.
                         </div>
                       )}
                     </div>
@@ -388,7 +431,7 @@ export function FunnelBuilder({ analysisId, onAnalysisSaved }: FunnelBuilderProp
                 </div>
               </div>
 
-              {analysisData.hasAbnormalDropOff && (
+              {analysisData.hasAbnormalDropOff && analysisData.hasActionableDropOff && (
                 <div className="rounded-lg border border-primary/20 bg-primary/5 p-5">
                   <div className="flex items-start gap-3">
                     <Brain className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
@@ -396,6 +439,7 @@ export function FunnelBuilder({ analysisId, onAnalysisSaved }: FunnelBuilderProp
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <h3 className="font-semibold">Evidence-aware hypotheses</h3>
                         {requestState === 'loading' && <Badge variant="secondary">Generating…</Badge>}
+                        {requestState === 'stale' && <Badge variant="destructive">Recovery needed</Badge>}
                         {requestState === 'complete' && serverAnalysis && <Badge variant="secondary">AI confidence: {serverAnalysis.confidence}</Badge>}
                       </div>
                       <p className="mt-1 text-sm text-muted-foreground">
@@ -405,6 +449,26 @@ export function FunnelBuilder({ analysisId, onAnalysisSaved }: FunnelBuilderProp
                       {requestState === 'loading' && (
                         <div className="mt-4 rounded-md border border-border/60 bg-background/70 p-4 text-sm text-muted-foreground" role="status" aria-live="polite">
                           Checking the flagged step for plausible explanations and the most useful next evidence…
+                        </div>
+                      )}
+
+                      {requestState === 'stale' && (
+                        <div className="mt-4 flex items-start justify-between gap-3 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-900" role="alert">
+                          <div className="flex min-w-0 items-start gap-2">
+                            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                            <span>This investigation was interrupted before hypothesis generation finished. The deterministic evidence above is still valid; retry to continue with this saved analysis.</span>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="shrink-0 border-amber-500/40 text-amber-900 hover:bg-amber-500/10"
+                            onClick={handleRetry}
+                            aria-label="Retry interrupted hypothesis generation"
+                          >
+                            <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                            Retry
+                          </Button>
                         </div>
                       )}
 
@@ -475,10 +539,10 @@ export function FunnelBuilder({ analysisId, onAnalysisSaved }: FunnelBuilderProp
             </Button>
                <div className="text-right text-xs text-muted-foreground">
                <div className="font-medium">
-                 {requestState === 'loading' ? 'AI reasoning in progress' : requestState === 'complete' ? 'AI reasoning complete' : requestState === 'not-needed' ? 'AI reasoning not called' : requestState === 'error' ? 'AI reasoning unavailable' : ''}
+                   {requestState === 'loading' ? 'AI reasoning in progress' : requestState === 'stale' ? 'AI reasoning needs recovery' : requestState === 'complete' ? 'AI reasoning complete' : requestState === 'not-needed' ? 'AI reasoning not called' : requestState === 'inconclusive' ? 'Diagnosis inconclusive' : requestState === 'error' ? 'AI reasoning unavailable' : ''}
                </div>
                <div>
-                 {requestState === 'not-needed' ? 'No flagged step met the threshold' : requestState === 'error' ? 'Deterministic analysis remains available' : 'Numbers above are deterministic'}
+                   {requestState === 'not-needed' ? 'No flagged step met the threshold' : requestState === 'inconclusive' ? 'More observed volume is needed before AI reasoning' : requestState === 'stale' ? 'The saved request stopped before it completed' : requestState === 'error' ? 'Deterministic analysis remains available' : 'Numbers above are deterministic'}
                </div>
             </div>
           </CardFooter>

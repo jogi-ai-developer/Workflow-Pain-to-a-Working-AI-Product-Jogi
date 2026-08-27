@@ -25,7 +25,8 @@ export const ListAnalysesResponseItem = zod.object({
   "timestamp": zod.string(),
   "flaggedSteps": zod.array(zod.string()),
   "confidence": zod.enum(['high', 'medium', 'low']),
-  "status": zod.enum(['loading', 'ok', 'no-flag', 'api-error', 'ai-parse-error'])
+  "status": zod.enum(['loading', 'ok', 'no-flag', 'inconclusive', 'api-error', 'ai-parse-error']),
+  "isStale": zod.boolean().describe('Whether a loading investigation has exceeded the recovery threshold')
 })
 export const ListAnalysesResponse = zod.array(ListAnalysesResponseItem)
 
@@ -35,6 +36,7 @@ export const ListAnalysesResponse = zod.array(ListAnalysesResponseItem)
  */
 
 
+export const createAnalysisBodyStepsItemEnteredMin = 0;
 
 export const createAnalysisBodyStepsItemConvertedMin = 0;
 
@@ -55,9 +57,9 @@ export const CreateAnalysisBody = zod.object({
   "steps": zod.array(zod.object({
   "name": zod.string().min(1),
   "order": zod.int().min(1),
-  "entered": zod.int().min(1),
+  "entered": zod.int().min(createAnalysisBodyStepsItemEnteredMin),
   "converted": zod.int().min(createAnalysisBodyStepsItemConvertedMin),
-  "description": zod.string()
+  "description": zod.string().optional()
 })).min(createAnalysisBodyStepsMin).max(createAnalysisBodyStepsMax),
   "context": zod.string().max(createAnalysisBodyContextMax).optional().describe('Deprecated alias for additionalContext'),
   "funnelGoal": zod.string().max(createAnalysisBodyFunnelGoalMax).optional().describe('Optional goal for the funnel being diagnosed'),
@@ -67,6 +69,7 @@ export const CreateAnalysisBody = zod.object({
 
 
 
+export const createAnalysisResponseInputStepsItemEnteredMin = 0;
 
 export const createAnalysisResponseInputStepsItemConvertedMin = 0;
 
@@ -83,6 +86,7 @@ export const createAnalysisResponseInputAdditionalContextMax = 2000;
 
 
 
+export const createAnalysisResponseStepsItemEnteredMin = 0;
 
 export const createAnalysisResponseStepsItemConvertedMin = 0;
 
@@ -109,9 +113,9 @@ export const CreateAnalysisResponse = zod.object({
   "steps": zod.array(zod.object({
   "name": zod.string().min(1),
   "order": zod.int().min(1),
-  "entered": zod.int().min(1),
+  "entered": zod.int().min(createAnalysisResponseInputStepsItemEnteredMin),
   "converted": zod.int().min(createAnalysisResponseInputStepsItemConvertedMin),
-  "description": zod.string()
+  "description": zod.string().optional()
 })).min(createAnalysisResponseInputStepsMin).max(createAnalysisResponseInputStepsMax),
   "context": zod.string().max(createAnalysisResponseInputContextMax).optional().describe('Deprecated alias for additionalContext'),
   "funnelGoal": zod.string().max(createAnalysisResponseInputFunnelGoalMax).optional().describe('Optional goal for the funnel being diagnosed'),
@@ -121,9 +125,9 @@ export const CreateAnalysisResponse = zod.object({
   "steps": zod.array(zod.object({
   "name": zod.string().min(1),
   "order": zod.int().min(1),
-  "entered": zod.int().min(1),
+  "entered": zod.int().min(createAnalysisResponseStepsItemEnteredMin),
   "converted": zod.int().min(createAnalysisResponseStepsItemConvertedMin),
-  "description": zod.string()
+  "description": zod.string().optional()
 })),
   "logic": zod.object({
   "thresholdPercent": zod.number(),
@@ -132,14 +136,18 @@ export const CreateAnalysisResponse = zod.object({
   "order": zod.int(),
   "entered": zod.int(),
   "converted": zod.int(),
-  "description": zod.string(),
+  "description": zod.string().optional(),
   "conversionRate": zod.number(),
   "dropOffPercent": zod.number(),
   "usersLost": zod.int(),
-  "isAbnormal": zod.boolean()
+  "isAbnormal": zod.boolean(),
+  "evidenceStrength": zod.enum(['high', 'medium', 'low', 'insufficient'])
 })),
   "flaggedSteps": zod.array(zod.string()),
-  "hasAbnormalDropOff": zod.boolean()
+  "hasAbnormalDropOff": zod.boolean(),
+  "hasActionableDropOff": zod.boolean(),
+  "hasInsufficientEvidence": zod.boolean(),
+  "evidenceStrength": zod.enum(['high', 'medium', 'low', 'insufficient'])
 }),
   "ai": zod.union([zod.object({
   "likelyCauses": zod.array(zod.string().min(1)).min(1).max(createAnalysisResponseAiOneLikelyCausesMax),
@@ -152,7 +160,8 @@ export const CreateAnalysisResponse = zod.object({
   "reasoning": zod.string().min(1)
 }),zod.null()]),
   "confidence": zod.enum(['high', 'medium', 'low']),
-  "status": zod.enum(['loading', 'ok', 'no-flag', 'api-error', 'ai-parse-error']),
+  "status": zod.enum(['loading', 'ok', 'no-flag', 'inconclusive', 'api-error', 'ai-parse-error']),
+  "isStale": zod.boolean().describe('Whether a loading investigation has exceeded the recovery threshold'),
   "errorMessage": zod.string().nullable()
 })
 
@@ -166,6 +175,7 @@ export const GetAnalysisParams = zod.object({
 
 
 
+export const getAnalysisResponseInputStepsItemEnteredMin = 0;
 
 export const getAnalysisResponseInputStepsItemConvertedMin = 0;
 
@@ -182,6 +192,7 @@ export const getAnalysisResponseInputAdditionalContextMax = 2000;
 
 
 
+export const getAnalysisResponseStepsItemEnteredMin = 0;
 
 export const getAnalysisResponseStepsItemConvertedMin = 0;
 
@@ -208,9 +219,9 @@ export const GetAnalysisResponse = zod.object({
   "steps": zod.array(zod.object({
   "name": zod.string().min(1),
   "order": zod.int().min(1),
-  "entered": zod.int().min(1),
+  "entered": zod.int().min(getAnalysisResponseInputStepsItemEnteredMin),
   "converted": zod.int().min(getAnalysisResponseInputStepsItemConvertedMin),
-  "description": zod.string()
+  "description": zod.string().optional()
 })).min(getAnalysisResponseInputStepsMin).max(getAnalysisResponseInputStepsMax),
   "context": zod.string().max(getAnalysisResponseInputContextMax).optional().describe('Deprecated alias for additionalContext'),
   "funnelGoal": zod.string().max(getAnalysisResponseInputFunnelGoalMax).optional().describe('Optional goal for the funnel being diagnosed'),
@@ -220,9 +231,9 @@ export const GetAnalysisResponse = zod.object({
   "steps": zod.array(zod.object({
   "name": zod.string().min(1),
   "order": zod.int().min(1),
-  "entered": zod.int().min(1),
+  "entered": zod.int().min(getAnalysisResponseStepsItemEnteredMin),
   "converted": zod.int().min(getAnalysisResponseStepsItemConvertedMin),
-  "description": zod.string()
+  "description": zod.string().optional()
 })),
   "logic": zod.object({
   "thresholdPercent": zod.number(),
@@ -231,14 +242,18 @@ export const GetAnalysisResponse = zod.object({
   "order": zod.int(),
   "entered": zod.int(),
   "converted": zod.int(),
-  "description": zod.string(),
+  "description": zod.string().optional(),
   "conversionRate": zod.number(),
   "dropOffPercent": zod.number(),
   "usersLost": zod.int(),
-  "isAbnormal": zod.boolean()
+  "isAbnormal": zod.boolean(),
+  "evidenceStrength": zod.enum(['high', 'medium', 'low', 'insufficient'])
 })),
   "flaggedSteps": zod.array(zod.string()),
-  "hasAbnormalDropOff": zod.boolean()
+  "hasAbnormalDropOff": zod.boolean(),
+  "hasActionableDropOff": zod.boolean(),
+  "hasInsufficientEvidence": zod.boolean(),
+  "evidenceStrength": zod.enum(['high', 'medium', 'low', 'insufficient'])
 }),
   "ai": zod.union([zod.object({
   "likelyCauses": zod.array(zod.string().min(1)).min(1).max(getAnalysisResponseAiOneLikelyCausesMax),
@@ -251,7 +266,8 @@ export const GetAnalysisResponse = zod.object({
   "reasoning": zod.string().min(1)
 }),zod.null()]),
   "confidence": zod.enum(['high', 'medium', 'low']),
-  "status": zod.enum(['loading', 'ok', 'no-flag', 'api-error', 'ai-parse-error']),
+  "status": zod.enum(['loading', 'ok', 'no-flag', 'inconclusive', 'api-error', 'ai-parse-error']),
+  "isStale": zod.boolean().describe('Whether a loading investigation has exceeded the recovery threshold'),
   "errorMessage": zod.string().nullable()
 })
 
@@ -279,6 +295,7 @@ export const RetryAnalysisBody = zod.object({
 
 
 
+export const retryAnalysisResponseInputStepsItemEnteredMin = 0;
 
 export const retryAnalysisResponseInputStepsItemConvertedMin = 0;
 
@@ -295,6 +312,7 @@ export const retryAnalysisResponseInputAdditionalContextMax = 2000;
 
 
 
+export const retryAnalysisResponseStepsItemEnteredMin = 0;
 
 export const retryAnalysisResponseStepsItemConvertedMin = 0;
 
@@ -321,9 +339,9 @@ export const RetryAnalysisResponse = zod.object({
   "steps": zod.array(zod.object({
   "name": zod.string().min(1),
   "order": zod.int().min(1),
-  "entered": zod.int().min(1),
+  "entered": zod.int().min(retryAnalysisResponseInputStepsItemEnteredMin),
   "converted": zod.int().min(retryAnalysisResponseInputStepsItemConvertedMin),
-  "description": zod.string()
+  "description": zod.string().optional()
 })).min(retryAnalysisResponseInputStepsMin).max(retryAnalysisResponseInputStepsMax),
   "context": zod.string().max(retryAnalysisResponseInputContextMax).optional().describe('Deprecated alias for additionalContext'),
   "funnelGoal": zod.string().max(retryAnalysisResponseInputFunnelGoalMax).optional().describe('Optional goal for the funnel being diagnosed'),
@@ -333,9 +351,9 @@ export const RetryAnalysisResponse = zod.object({
   "steps": zod.array(zod.object({
   "name": zod.string().min(1),
   "order": zod.int().min(1),
-  "entered": zod.int().min(1),
+  "entered": zod.int().min(retryAnalysisResponseStepsItemEnteredMin),
   "converted": zod.int().min(retryAnalysisResponseStepsItemConvertedMin),
-  "description": zod.string()
+  "description": zod.string().optional()
 })),
   "logic": zod.object({
   "thresholdPercent": zod.number(),
@@ -344,14 +362,18 @@ export const RetryAnalysisResponse = zod.object({
   "order": zod.int(),
   "entered": zod.int(),
   "converted": zod.int(),
-  "description": zod.string(),
+  "description": zod.string().optional(),
   "conversionRate": zod.number(),
   "dropOffPercent": zod.number(),
   "usersLost": zod.int(),
-  "isAbnormal": zod.boolean()
+  "isAbnormal": zod.boolean(),
+  "evidenceStrength": zod.enum(['high', 'medium', 'low', 'insufficient'])
 })),
   "flaggedSteps": zod.array(zod.string()),
-  "hasAbnormalDropOff": zod.boolean()
+  "hasAbnormalDropOff": zod.boolean(),
+  "hasActionableDropOff": zod.boolean(),
+  "hasInsufficientEvidence": zod.boolean(),
+  "evidenceStrength": zod.enum(['high', 'medium', 'low', 'insufficient'])
 }),
   "ai": zod.union([zod.object({
   "likelyCauses": zod.array(zod.string().min(1)).min(1).max(retryAnalysisResponseAiOneLikelyCausesMax),
@@ -364,7 +386,8 @@ export const RetryAnalysisResponse = zod.object({
   "reasoning": zod.string().min(1)
 }),zod.null()]),
   "confidence": zod.enum(['high', 'medium', 'low']),
-  "status": zod.enum(['loading', 'ok', 'no-flag', 'api-error', 'ai-parse-error']),
+  "status": zod.enum(['loading', 'ok', 'no-flag', 'inconclusive', 'api-error', 'ai-parse-error']),
+  "isStale": zod.boolean().describe('Whether a loading investigation has exceeded the recovery threshold'),
   "errorMessage": zod.string().nullable()
 })
 
@@ -385,7 +408,8 @@ export const GetAdminSummaryResponse = zod.object({
   "timestamp": zod.string(),
   "flaggedSteps": zod.array(zod.string()),
   "confidence": zod.enum(['high', 'medium', 'low']),
-  "status": zod.enum(['loading', 'ok', 'no-flag', 'api-error', 'ai-parse-error'])
+  "status": zod.enum(['loading', 'ok', 'no-flag', 'inconclusive', 'api-error', 'ai-parse-error']),
+  "isStale": zod.boolean().describe('Whether a loading investigation has exceeded the recovery threshold')
 }))
 })
 
@@ -406,11 +430,12 @@ export const GenerateHypothesesBody = zod.object({
   "order": zod.int(),
   "entered": zod.int(),
   "converted": zod.int(),
-  "description": zod.string(),
+  "description": zod.string().optional(),
   "conversionRate": zod.number(),
   "dropOffPercent": zod.number(),
   "usersLost": zod.int(),
-  "isAbnormal": zod.boolean()
+  "isAbnormal": zod.boolean(),
+  "evidenceStrength": zod.enum(['high', 'medium', 'low', 'insufficient'])
 })).min(1)
 })
 
